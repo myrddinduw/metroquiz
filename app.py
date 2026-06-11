@@ -278,12 +278,16 @@ def renderizar_mapa():
         fill_opacity=0.95,
     ).add_to(m)
 
-    # Ao fim revela o nome sobrepondo a estrela
+    # Ao fim revela o nome sobrepondo a estrela (DivIcon = sem imagem externa)
     if st.session_state.fim:
         folium.Marker(
             location=[lat, lon],
             tooltip=secreta["nome"],
-            icon=folium.Icon(color="black", icon="star", prefix="fa"),
+            icon=folium.DivIcon(
+                html='<div style="font-size:26px;line-height:1;filter:drop-shadow(0 0 2px #000)">⭐</div>',
+                icon_size=(30, 30),
+                icon_anchor=(15, 15),
+            ),
         ).add_to(m)
 
     st_folium(m, width="100%", height=420, returned_objects=[], key="mapa_principal")
