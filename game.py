@@ -15,6 +15,7 @@ CORES_LINHAS: Dict[int, str] = {
     4:  "#FFD400",
     5:  "#92278F",
     15: "#9C9C9C",
+    17: "#C9A94A",
 }
 
 # Mapeamento de número de linha → nome e cor hex
@@ -22,7 +23,7 @@ LINHAS_INFO: Dict[int, Dict] = {
     num: {"nome": nome, "cor": CORES_LINHAS[num]}
     for num, nome in {
         1: "Azul", 2: "Verde", 3: "Vermelha",
-        4: "Amarela", 5: "Lilás", 15: "Prata",
+        4: "Amarela", 5: "Lilás", 15: "Prata", 17: "Ouro",
     }.items()
 }
 

@@ -22,7 +22,7 @@ Acesse `http://localhost:8501` no navegador.
 
 ## Regras
 
-1. Uma estação secreta é sorteada entre as 78 estações das **6 linhas em operação**.
+1. Uma estação secreta é sorteada entre as 92 estações das **7 linhas em operação**.
 2. Você tem **6 tentativas** para adivinhar.
 3. Cada palpite mostra:
    - **Chips de linha** coloridos — chips **sem ✗** indicam linha em comum com a estação secreta.
@@ -55,21 +55,22 @@ Sem a chave, o app usa tiles gratuitos do CartoDB (sem rótulos).
 Ative o **🎯 Modo Difícil** na barra lateral:
 
 - As linhas do metrô começam **ocultas** no mapa.
-- A cada erro, **uma nova linha** é revelada (na ordem: 1, 2, 3, 4, 5, 15).
+- A cada erro, **uma nova linha** é revelada (na ordem: 1, 2, 3, 4, 5, 15, 17).
 - Após **5 erros**, o pan e o zoom do mapa ficam **travados**.
 
 ## Linhas cobertas
 
 | Linha | Nome     | Cor     | Estações |
 |-------|----------|---------|----------|
-| 1     | Azul     | #0455A1 | 21       |
+| 1     | Azul     | #0455A1 | 23       |
 | 2     | Verde    | #007E5E | 14       |
 | 3     | Vermelha | #EE372F | 18       |
-| 4     | Amarela  | #FFD400 | 10       |
-| 5     | Lilás    | #92278F | 14       |
-| 15    | Prata    | #9C9C9C | 10       |
+| 4     | Amarela  | #FFD400 | 11       |
+| 5     | Lilás    | #92278F | 17       |
+| 15    | Prata    | #9C9C9C | 11       |
+| 17    | Ouro     | #C9A94A | 8        |
 
-**78 estações únicas**, 9 baldeações.
+**92 estações únicas**, 10 baldeações.
 
 ## Estrutura
 
