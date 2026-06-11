@@ -156,11 +156,7 @@ with st.sidebar:
         value=st.session_state.get("modo_dificil", False),
     )
     if st.session_state.modo_dificil:
-        st.caption(
-            "Linhas ocultas no início. "
-            "Uma linha revelada por erro. "
-            "Pan do mapa trava após 5 erros."
-        )
+        st.caption("Linhas ocultas no início. Uma nova linha revelada a cada erro.")
 
 
 # ── Componentes Folium ────────────────────────────────────────────────────
@@ -201,11 +197,10 @@ def chip_linha(linha: int, cor: str, bate: bool) -> str:
 
 
 def renderizar_mapa():
-    """Mapa Folium sem nomes, centrado na secreta, com linhas e palpites."""
+    """Mapa Folium travado nos arredores da secreta, linhas em cor neutra."""
     secreta      = st.session_state.secreta
     modo_dificil = st.session_state.get("modo_dificil", False)
     num_erros    = sum(1 for _, res in st.session_state.palpites if not res["acertou"])
-    pan_travado  = modo_dificil and num_erros >= 5
 
     # Tiles: MapTiler (se chave configurada) ou CartoDB sem rótulos (gratuito)
     try:
@@ -216,17 +211,28 @@ def renderizar_mapa():
         tiles_url  = "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png"
         tiles_attr = "© OpenStreetMap contributors © CARTO"
 
+    # Caixa de confinamento: ±0.008° ao redor da secreta (~900 m)
+    delta = 0.008
+    lat, lon = secreta["lat"], secreta["lon"]
+
     m = folium.Map(
-        location=[secreta["lat"], secreta["lon"]],
-        zoom_start=14,
+        location=[lat, lon],
+        zoom_start=15,
+        min_zoom=15,
+        max_zoom=15,
+        max_bounds=True,
+        min_lat=lat - delta,
+        max_lat=lat + delta,
+        min_lon=lon - delta,
+        max_lon=lon + delta,
         tiles=tiles_url,
         attr=tiles_attr,
+        zoom_control=False,
     )
+    # Desabilita todas as interações de pan/zoom via JavaScript
+    TravarPan().add_to(m)
 
-    if pan_travado:
-        TravarPan().add_to(m)
-
-    # Em modo difícil, revela uma linha por erro na ordem numérica [1,2,3,4,5,15]
+    # Em modo difícil, revela uma linha por erro na ordem [1,2,3,4,5,15]
     ordem_linhas = list(CORES_LINHAS.keys())
     linhas_visiveis = (
         set(ordem_linhas[:num_erros]) if modo_dificil else set(CORES_LINHAS.keys())
@@ -235,14 +241,15 @@ def renderizar_mapa():
     # Geometria real via OSM; se indisponível, usa segmentos retos entre estações
     geom_osm = buscar_geometria_osm()
 
+    # Cor neutra única: a cor por linha é dica exclusiva dos chips de feedback
     for linha in linhas_visiveis:
         coords = geom_osm.get(linha) or linhas_coords.get(linha, [])
         if coords:
             folium.PolyLine(
                 coords,
-                color=CORES_LINHAS.get(linha, "#888888"),
-                weight=4,
-                opacity=0.85,
+                color="#777777",
+                weight=3,
+                opacity=0.8,
             ).add_to(m)
 
     # Marcadores dos palpites
@@ -260,10 +267,21 @@ def renderizar_mapa():
             tooltip=nome,
         ).add_to(m)
 
-    # Revela a secreta somente ao fim da rodada
+    # Alvo da secreta — sempre visível, sem texto (círculo branco com borda escura)
+    folium.CircleMarker(
+        location=[lat, lon],
+        radius=10,
+        color="#222222",
+        weight=3,
+        fill=True,
+        fill_color="white",
+        fill_opacity=0.95,
+    ).add_to(m)
+
+    # Ao fim revela o nome sobrepondo a estrela
     if st.session_state.fim:
         folium.Marker(
-            location=[secreta["lat"], secreta["lon"]],
+            location=[lat, lon],
             tooltip=secreta["nome"],
             icon=folium.Icon(color="black", icon="star", prefix="fa"),
         ).add_to(m)
