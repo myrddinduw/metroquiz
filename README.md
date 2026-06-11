@@ -1,6 +1,6 @@
 # 🚇 SP-Metrodle
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://metroquiz-hdaq2mlf4mhsvccvjusbpg.streamlit.app/)
+[![Streamlit App](https://img.shields.io/badge/Streamlit-Jogar%20agora-FF4B4B?logo=streamlit&logoColor=white)](https://metroquiz-hdaq2mlf4mhsvccvjusbpg.streamlit.app/)
 
 Jogue diretamente no navegador pelo Streamlit Community Cloud — sem instalação.
 
