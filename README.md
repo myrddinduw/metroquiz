@@ -1,5 +1,9 @@
 # 🚇 SP-Metrodle
 
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](COLAR_URL_AQUI)
+
+Jogue diretamente no navegador pelo Streamlit Community Cloud — sem instalação.
+
 Versão local e ilimitada do Metrodle para memorizar as estações do Metrô de São Paulo.
 
 ## Instalação
