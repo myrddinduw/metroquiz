@@ -1,8 +1,10 @@
 """SP-Metrodle — interface Streamlit."""
 
 import json as _json
+import math
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
 import folium
 import streamlit as st
@@ -53,53 +55,99 @@ def dados():
     return estacoes, grafo, por_nome, nomes, linhas_coords
 
 
-@st.cache_data(ttl=604800, show_spinner="Carregando geometria das linhas (OpenStreetMap)...")
+_GEOM_PATH = Path(__file__).parent / "data" / "linhas_geom.json"
+
+
+def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    R = 6_371_000.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = (math.sin(dlat / 2) ** 2
+         + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2))
+         * math.sin(dlon / 2) ** 2)
+    return R * 2 * math.asin(math.sqrt(min(a, 1.0)))
+
+
+
+def _segs_da_relacao(elem: dict) -> list:
+    segs = []
+    for m in elem.get("members", []):
+        if m.get("type") != "way" or m.get("role") in ("stop", "platform"):
+            continue
+        pts = [[n["lat"], n["lon"]] for n in m.get("geometry", [])]
+        if len(pts) >= 2:
+            segs.append(pts)
+    return segs
+
+
+def _comprimento_segs(segs: list) -> float:
+    total = 0.0
+    for seg in segs:
+        for i in range(len(seg) - 1):
+            total += _haversine_m(seg[i][0], seg[i][1], seg[i + 1][0], seg[i + 1][1])
+    return total
+
+
+@st.cache_data(ttl=604800, show_spinner="Carregando geometria das linhas...")
 def buscar_geometria_osm() -> dict:
     """
-    Busca geometria real das linhas do Metrô SP via Overpass API.
-    Retorna {numero_linha: [[lat, lon], ...]}; dicionário vazio se falhar.
-    Resultado cacheado por 7 dias para não travar o app a cada acesso.
-    """
-    query = (
-        "[out:json][timeout:20];"
-        "(relation[\"network\"=\"Metrô SP\"][\"type\"=\"route\"][\"route\"~\"subway|monorail\"];"
-        "relation[\"network\"=\"ViaQuatro\"][\"type\"=\"route\"][\"route\"=\"subway\"];"
-        "relation[\"network\"=\"ViaMobilidade\"][\"type\"=\"route\"][\"route\"~\"subway|monorail\"];);"
-        "out geom;"
-    )
-    try:
-        payload = urllib.parse.urlencode({"data": query}).encode()
-        req = urllib.request.Request(
-            "https://overpass-api.de/api/interpreter",
-            data=payload,
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            resultado = _json.loads(resp.read())
-    except Exception:
-        return {}
+    Retorna {numero_linha: [[[lat, lon], ...], ...]} — lista de segmentos por linha.
 
-    linhas: dict = {}
-    for elem in resultado.get("elements", []):
-        if elem["type"] != "relation":
-            continue
-        try:
-            ref = int(elem.get("tags", {}).get("ref", ""))
-        except ValueError:
-            continue
-        # Aceita só linhas conhecidas; ignora variantes (já processadas)
-        if ref not in CORES_LINHAS or ref in linhas:
-            continue
-        coords: list = []
-        for membro in elem.get("members", []):
-            if membro.get("type") != "way" or membro.get("role") in ("stop", "platform"):
+    Prioridade:
+      1. data/linhas_geom.json (pré-computado, commitado no repo)
+      2. Overpass ao vivo — uma requisição por linha para evitar timeout
+      3. {} (app usa segmento reto entre estações como fallback)
+    """
+    # 1. Arquivo pré-computado
+    try:
+        with open(_GEOM_PATH, encoding="utf-8") as f:
+            raw = _json.load(f)
+        result = {}
+        for k, v in raw.items():
+            ref = int(k)
+            if ref not in CORES_LINHAS or not v:
                 continue
-            for node in membro.get("geometry", []):
-                pt = [node["lat"], node["lon"]]
-                if not coords or coords[-1] != pt:
-                    coords.append(pt)
-        if coords:
-            linhas[ref] = coords
+            # suporte ao formato antigo (lista plana de [lat,lon])
+            if isinstance(v[0][0], (int, float)):
+                result[ref] = [v]
+            else:
+                result[ref] = v
+        return result
+    except Exception:
+        pass
+
+    # 2. Overpass ao vivo — uma requisição por linha para evitar timeout
+    def _fetch_ref(ref: int) -> list:
+        query = (
+            f"[out:json][timeout:45];"
+            f"relation[\"network\"=\"Metrô de São Paulo\"][\"type\"=\"route\"]"
+            f"[\"ref\"=\"{ref}\"];out geom;"
+        )
+        url = ("https://overpass-api.de/api/interpreter?"
+               + urllib.parse.urlencode({"data": query}))
+        req = urllib.request.Request(url, headers={"User-Agent": "metroquiz/1.0"})
+        with urllib.request.urlopen(req, timeout=50) as resp:
+            return _json.loads(resp.read()).get("elements", [])
+
+    import time as _time
+    linhas: dict = {}
+    for ref in sorted(CORES_LINHAS.keys()):
+        for _tentativa in range(3):
+            try:
+                elems = _fetch_ref(ref)
+                break
+            except Exception:
+                _time.sleep((_tentativa + 1) * 6)
+        else:
+            continue
+        por_ref_elems = [e for e in elems if e.get("type") == "relation"]
+        if not por_ref_elems:
+            continue
+        melhor = max(por_ref_elems, key=lambda e: _comprimento_segs(_segs_da_relacao(e)))
+        segs = _segs_da_relacao(melhor)
+        if segs:
+            linhas[ref] = segs
+        _time.sleep(2)
     return linhas
 
 
@@ -293,14 +341,16 @@ def renderizar_mapa():
 
     # Cor neutra única: a cor por linha é dica exclusiva dos chips de feedback
     for linha in linhas_visiveis:
-        coords = geom_osm.get(linha) or linhas_coords.get(linha, [])
-        if coords:
-            folium.PolyLine(
-                coords,
-                color="#777777",
-                weight=3,
-                opacity=0.8,
-            ).add_to(m)
+        segs_linha = geom_osm.get(linha)
+        if segs_linha:
+            for seg in segs_linha:
+                folium.PolyLine(seg, color="#777777", weight=3, opacity=0.8).add_to(m)
+        else:
+            coords = linhas_coords.get(linha, [])
+            if coords:
+                folium.PolyLine(
+                    coords, color="#777777", weight=3, opacity=0.8
+                ).add_to(m)
 
     # Marcadores dos palpites
     for nome, _ in st.session_state.palpites:
