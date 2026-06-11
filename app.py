@@ -9,6 +9,7 @@ import streamlit as st
 from folium import MacroElement
 from jinja2 import Template
 from streamlit_folium import st_folium
+from streamlit_local_storage import LocalStorage
 
 from game import (
     CORES_LINHAS,
@@ -104,7 +105,11 @@ def buscar_geometria_osm() -> dict:
 
 estacoes, grafo, por_nome, nomes, linhas_coords = dados()
 
-# ── Estado da sessão ──────────────────────────────────────────────────────
+# ── Estado da sessão e persistência (localStorage) ────────────────────────
+
+ESTADO_KEY = "metroquiz_estado"
+localS = LocalStorage()
+
 
 def nova_rodada():
     st.session_state.secreta = sortear_estacao(estacoes)
@@ -112,13 +117,74 @@ def nova_rodada():
     st.session_state.fim = False
     st.session_state.vitoria = False
 
-if "secreta" not in st.session_state:
+
+def _init_fresh():
+    """Inicializa todas as variáveis de sessão do zero."""
     nova_rodada()
     st.session_state.rodadas = 0
     st.session_state.vitorias = 0
     st.session_state.streak = 0
     st.session_state.tentativas_total = 0
     st.session_state.modo_dificil = False
+
+
+def _restaurar_estado(blob: dict):
+    """Restaura st.session_state a partir de um blob salvo no localStorage."""
+    nome = blob.get("secreta", "")
+    if nome not in por_nome:
+        _init_fresh()
+        return
+    st.session_state.secreta           = por_nome[nome]
+    st.session_state.palpites          = [list(p) for p in blob.get("palpites", [])]
+    st.session_state.fim               = bool(blob.get("fim", False))
+    st.session_state.vitoria           = bool(blob.get("vitoria", False))
+    st.session_state.rodadas           = int(blob.get("rodadas", 0))
+    st.session_state.vitorias          = int(blob.get("vitorias", 0))
+    st.session_state.streak            = int(blob.get("streak", 0))
+    st.session_state.tentativas_total  = int(blob.get("tentativas_total", 0))
+    st.session_state.modo_dificil      = bool(blob.get("modo_dificil", False))
+
+
+def salvar_estado():
+    """Serializa o estado atual e grava no localStorage (só se mudou)."""
+    if "secreta" not in st.session_state:
+        return
+    blob = {
+        "secreta":          st.session_state.secreta["nome"],
+        "palpites":         st.session_state.palpites,
+        "fim":              st.session_state.fim,
+        "vitoria":          st.session_state.vitoria,
+        "rodadas":          st.session_state.rodadas,
+        "vitorias":         st.session_state.vitorias,
+        "streak":           st.session_state.streak,
+        "tentativas_total": st.session_state.tentativas_total,
+        "modo_dificil":     st.session_state.get("modo_dificil", False),
+    }
+    # Evita gravações repetidas usando assinatura do estado
+    sig = _json.dumps(blob, sort_keys=True, default=str)
+    if st.session_state.get("_ls_sig") != sig:
+        localS.setItem(ESTADO_KEY, blob, key="ls_set")
+        st.session_state._ls_sig = sig
+
+
+# Na primeira e na segunda renderização tentamos ler o localStorage.
+# Render 1: componente ainda carregando → getItem retorna None → init fresh.
+# Render 2: componente carregado → retorna blob salvo (ou None se vazio).
+st.session_state._ls_render = st.session_state.get("_ls_render", 0) + 1
+
+if st.session_state._ls_render <= 2:
+    stored = localS.getItem(ESTADO_KEY, key="ls_get")
+    if stored is not None:
+        try:
+            blob = stored if isinstance(stored, dict) else _json.loads(stored)
+            _restaurar_estado(blob)
+        except Exception:
+            if "secreta" not in st.session_state:
+                _init_fresh()
+    elif "secreta" not in st.session_state:
+        _init_fresh()
+elif "secreta" not in st.session_state:
+    _init_fresh()
 
 
 # ── Placar de sessão ──────────────────────────────────────────────────────
@@ -208,7 +274,7 @@ def renderizar_mapa():
         tiles_url  = f"https://api.maptiler.com/maps/positron/{{z}}/{{x}}/{{y}}.png?key={chave}"
         tiles_attr = "© MapTiler © OpenStreetMap contributors"
     except (KeyError, FileNotFoundError, AttributeError):
-        tiles_url  = "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png"
+        tiles_url  = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png"
         tiles_attr = "© OpenStreetMap contributors © CARTO"
 
     # Caixa de confinamento: ±0.008° ao redor da secreta (~900 m)
@@ -400,3 +466,6 @@ if st.session_state.fim:
 
 st.divider()
 renderizar_legenda_linhas()
+
+# Persiste o estado atual no localStorage do navegador
+salvar_estado()
