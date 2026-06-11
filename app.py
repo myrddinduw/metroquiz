@@ -9,6 +9,7 @@ import streamlit as st
 from folium import MacroElement
 from jinja2 import Template
 from streamlit_folium import st_folium
+from streamlit_local_storage import LocalStorage
 
 from game import (
     CORES_LINHAS,
@@ -61,7 +62,7 @@ def buscar_geometria_osm() -> dict:
     """
     query = (
         "[out:json][timeout:20];"
-        "(relation[\"network\"=\"Metrô SP\"][\"type\"=\"route\"][\"route\"=\"subway\"];"
+        "(relation[\"network\"=\"Metrô SP\"][\"type\"=\"route\"][\"route\"~\"subway|monorail\"];"
         "relation[\"network\"=\"ViaQuatro\"][\"type\"=\"route\"][\"route\"=\"subway\"];"
         "relation[\"network\"=\"ViaMobilidade\"][\"type\"=\"route\"][\"route\"~\"subway|monorail\"];);"
         "out geom;"
@@ -104,6 +105,26 @@ def buscar_geometria_osm() -> dict:
 
 estacoes, grafo, por_nome, nomes, linhas_coords = dados()
 
+# ── LocalStorage ──────────────────────────────────────────────────────────
+
+_ls       = LocalStorage()
+_LS_CHAVE = "metroquiz_estado"
+
+
+def _salvar_estado() -> None:
+    _ls.setItem(_LS_CHAVE, {
+        "secreta_nome":      st.session_state.secreta["nome"],
+        "palpites":          st.session_state.palpites,
+        "fim":               st.session_state.fim,
+        "vitoria":           st.session_state.vitoria,
+        "rodadas":           st.session_state.rodadas,
+        "vitorias":          st.session_state.vitorias,
+        "streak":            st.session_state.streak,
+        "tentativas_total":  st.session_state.tentativas_total,
+        "modo_dificil":      st.session_state.get("modo_dificil", False),
+    })
+
+
 # ── Estado da sessão ──────────────────────────────────────────────────────
 
 def nova_rodada():
@@ -112,13 +133,42 @@ def nova_rodada():
     st.session_state.fim = False
     st.session_state.vitoria = False
 
+
 if "secreta" not in st.session_state:
-    nova_rodada()
-    st.session_state.rodadas = 0
-    st.session_state.vitorias = 0
-    st.session_state.streak = 0
-    st.session_state.tentativas_total = 0
-    st.session_state.modo_dificil = False
+    # render 1 → getItem retorna None (componente ainda carregando); render 2 → valor real
+    if "_ls_render" not in st.session_state:
+        st.session_state._ls_render = 0
+    _blob = _ls.getItem(_LS_CHAVE)
+    st.session_state._ls_render += 1
+
+    if _blob is None and st.session_state._ls_render == 1:
+        st.rerun()   # aguarda render 2 para ler o localStorage com valor real
+
+    _restaurado = False
+    if isinstance(_blob, dict):
+        _nome = _blob.get("secreta_nome")
+        if _nome and _nome in por_nome:
+            try:
+                st.session_state.secreta          = por_nome[_nome]
+                st.session_state.palpites         = _blob.get("palpites", [])
+                st.session_state.fim              = bool(_blob.get("fim"))
+                st.session_state.vitoria          = bool(_blob.get("vitoria"))
+                st.session_state.rodadas          = int(_blob.get("rodadas", 0))
+                st.session_state.vitorias         = int(_blob.get("vitorias", 0))
+                st.session_state.streak           = int(_blob.get("streak", 0))
+                st.session_state.tentativas_total = int(_blob.get("tentativas_total", 0))
+                st.session_state.modo_dificil     = bool(_blob.get("modo_dificil", False))
+                _restaurado = True
+            except Exception:
+                pass
+
+    if not _restaurado:
+        nova_rodada()
+        st.session_state.rodadas          = 0
+        st.session_state.vitorias         = 0
+        st.session_state.streak           = 0
+        st.session_state.tentativas_total = 0
+        st.session_state.modo_dificil     = False
 
 
 # ── Placar de sessão ──────────────────────────────────────────────────────
@@ -208,7 +258,7 @@ def renderizar_mapa():
         tiles_url  = f"https://api.maptiler.com/maps/positron/{{z}}/{{x}}/{{y}}.png?key={chave}"
         tiles_attr = "© MapTiler © OpenStreetMap contributors"
     except (KeyError, FileNotFoundError, AttributeError):
-        tiles_url  = "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png"
+        tiles_url  = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png"
         tiles_attr = "© OpenStreetMap contributors © CARTO"
 
     # Caixa de confinamento: ±0.008° ao redor da secreta (~900 m)
@@ -373,6 +423,7 @@ if not st.session_state.fim:
                     st.session_state.rodadas += 1
                     st.session_state.streak = 0
 
+                _salvar_estado()
                 st.rerun()
         else:
             st.error("Estação não encontrada. Tente novamente.")
@@ -396,6 +447,7 @@ if st.session_state.fim:
 
     if st.button("🔄 Nova estação", type="primary"):
         nova_rodada()
+        _salvar_estado()
         st.rerun()
 
 st.divider()
