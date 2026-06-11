@@ -7,14 +7,23 @@ from collections import deque
 from pathlib import Path
 from typing import Dict, List, Optional
 
+# Cores oficiais das linhas (hex) — fonte única de verdade
+CORES_LINHAS: Dict[int, str] = {
+    1:  "#0455A1",
+    2:  "#007E5E",
+    3:  "#EE372F",
+    4:  "#FFD400",
+    5:  "#92278F",
+    15: "#9C9C9C",
+}
+
 # Mapeamento de número de linha → nome e cor hex
 LINHAS_INFO: Dict[int, Dict] = {
-    1:  {"nome": "Azul",    "cor": "#0455A4"},
-    2:  {"nome": "Verde",   "cor": "#007E5E"},
-    3:  {"nome": "Vermelha","cor": "#EE372F"},
-    4:  {"nome": "Amarela", "cor": "#FFC20E"},
-    5:  {"nome": "Lilás",   "cor": "#9B2990"},
-    15: {"nome": "Prata",   "cor": "#9E9E9E"},
+    num: {"nome": nome, "cor": CORES_LINHAS[num]}
+    for num, nome in {
+        1: "Azul", 2: "Verde", 3: "Vermelha",
+        4: "Amarela", 5: "Lilás", 15: "Prata",
+    }.items()
 }
 
 
@@ -33,10 +42,8 @@ def construir_grafo(estacoes: List[Dict]) -> Dict[str, List[str]]:
     na mesma linha. Baldeações conectam automaticamente as linhas via BFS
     porque a mesma estação aparece em várias linhas.
     """
-    # Índice: nome → dados da estação
     por_nome = {e["nome"]: e for e in estacoes}
 
-    # Agrupa estações por linha com sua posição de ordem
     por_linha: Dict[int, List[Dict]] = {}
     for e in estacoes:
         for linha in e["linhas"]:
@@ -45,7 +52,6 @@ def construir_grafo(estacoes: List[Dict]) -> Dict[str, List[str]]:
     grafo: Dict[str, List[str]] = {e["nome"]: [] for e in estacoes}
 
     for linha, membros in por_linha.items():
-        # Ordena pelo campo "ordem" da linha atual
         membros_ord = sorted(membros, key=lambda e: e["ordem"][str(linha)])
         for i in range(len(membros_ord) - 1):
             a = membros_ord[i]["nome"]
@@ -60,7 +66,7 @@ def construir_grafo(estacoes: List[Dict]) -> Dict[str, List[str]]:
 
 def distancia(grafo: Dict[str, List[str]], origem: str, destino: str) -> int:
     """
-    Retorna a menor quantidade de saltos (estações) entre origem e destino via BFS.
+    Retorna a menor quantidade de estações entre origem e destino via BFS.
     Retorna -1 se não houver caminho (dataset inconsistente).
     """
     if origem == destino:
@@ -88,36 +94,48 @@ def direcao(
     Retorna seta cardinal/diagonal apontando de A para B.
     Usa limiares de 22,5° para decidir entre cardinal e diagonal.
     """
-    # dlat positivo = B está ao Norte de A (lat menos negativa)
     dlat = lat_b - lat_a
     dlon = lon_b - lon_a
 
-    # atan2(dE, dN): 0° = Norte, 90° = Leste, 180° = Sul, 270° = Oeste
     angulo = math.degrees(math.atan2(dlon, dlat)) % 360
-    angulo = angulo % 360
 
-    # Divide 360° em 8 octantes de 45°, centrados nos pontos cardinais/diagonais
     if angulo < 22.5 or angulo >= 337.5:
-        return "↑"   # Norte
+        return "↑"
     elif angulo < 67.5:
-        return "↗"   # Nordeste
+        return "↗"
     elif angulo < 112.5:
-        return "→"   # Leste
+        return "→"
     elif angulo < 157.5:
-        return "↘"   # Sudeste
+        return "↘"
     elif angulo < 202.5:
-        return "↓"   # Sul
+        return "↓"
     elif angulo < 247.5:
-        return "↙"   # Sudoeste
+        return "↙"
     elif angulo < 292.5:
-        return "←"   # Oeste
+        return "←"
     else:
-        return "↖"   # Noroeste
+        return "↖"
 
 
 def sortear_estacao(estacoes: List[Dict]) -> Dict:
     """Retorna uma estação aleatória da lista."""
     return random.choice(estacoes)
+
+
+def avaliar_linhas(palpite: Dict, secreta: Dict) -> List[Dict]:
+    """
+    Retorna chip de cada linha da estação palpitada indicando se bate com a secreta.
+    Cada item: {linha: int, cor: str, bate: bool}.
+    """
+    linhas_secreta = set(secreta["linhas"])
+    return [
+        {
+            "linha": linha,
+            "cor": CORES_LINHAS.get(linha, "#888888"),
+            "bate": linha in linhas_secreta,
+        }
+        for linha in sorted(palpite["linhas"])
+    ]
 
 
 def linhas_compartilhadas(palpite: Dict, secreta: Dict) -> List[int]:
@@ -134,7 +152,7 @@ def avaliar_palpite(
     Avalia um palpite e retorna um dicionário com:
     - acertou: bool
     - linhas_comuns: lista de números de linha compartilhados
-    - distancia: int (saltos entre palpite e secreta)
+    - distancia: int (estações entre palpite e secreta)
     - direcao: str (seta cardinal/diagonal de palpite → secreta)
     """
     acertou = palpite["nome"] == secreta["nome"]

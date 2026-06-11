@@ -1,8 +1,19 @@
 """SP-Metrodle — interface Streamlit."""
 
+import json as _json
+import urllib.parse
+import urllib.request
+
+import folium
 import streamlit as st
+from folium import MacroElement
+from jinja2 import Template
+from streamlit_folium import st_folium
+
 from game import (
+    CORES_LINHAS,
     LINHAS_INFO,
+    avaliar_linhas,
     avaliar_palpite,
     carregar_estacoes,
     construir_grafo,
@@ -26,9 +37,72 @@ def dados():
     grafo = construir_grafo(estacoes)
     por_nome = {e["nome"]: e for e in estacoes}
     nomes = sorted(por_nome.keys())
-    return estacoes, grafo, por_nome, nomes
+    # Pré-computa as coordenadas de cada linha ordenadas para o mapa
+    por_linha = {}
+    for e in estacoes:
+        for linha in e["linhas"]:
+            por_linha.setdefault(linha, []).append(e)
+    linhas_coords = {
+        linha: [
+            [e["lat"], e["lon"]]
+            for e in sorted(membros, key=lambda e: e["ordem"][str(linha)])
+        ]
+        for linha, membros in por_linha.items()
+    }
+    return estacoes, grafo, por_nome, nomes, linhas_coords
 
-estacoes, grafo, por_nome, nomes = dados()
+
+@st.cache_data(ttl=604800, show_spinner="Carregando geometria das linhas (OpenStreetMap)...")
+def buscar_geometria_osm() -> dict:
+    """
+    Busca geometria real das linhas do Metrô SP via Overpass API.
+    Retorna {numero_linha: [[lat, lon], ...]}; dicionário vazio se falhar.
+    Resultado cacheado por 7 dias para não travar o app a cada acesso.
+    """
+    query = (
+        "[out:json][timeout:20];"
+        "(relation[\"network\"=\"Metrô SP\"][\"type\"=\"route\"][\"route\"=\"subway\"];"
+        "relation[\"network\"=\"ViaQuatro\"][\"type\"=\"route\"][\"route\"=\"subway\"];"
+        "relation[\"network\"=\"ViaMobilidade\"][\"type\"=\"route\"][\"route\"~\"subway|monorail\"];);"
+        "out geom;"
+    )
+    try:
+        payload = urllib.parse.urlencode({"data": query}).encode()
+        req = urllib.request.Request(
+            "https://overpass-api.de/api/interpreter",
+            data=payload,
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            resultado = _json.loads(resp.read())
+    except Exception:
+        return {}
+
+    linhas: dict = {}
+    for elem in resultado.get("elements", []):
+        if elem["type"] != "relation":
+            continue
+        try:
+            ref = int(elem.get("tags", {}).get("ref", ""))
+        except ValueError:
+            continue
+        # Aceita só linhas conhecidas; ignora variantes (já processadas)
+        if ref not in CORES_LINHAS or ref in linhas:
+            continue
+        coords: list = []
+        for membro in elem.get("members", []):
+            if membro.get("type") != "way" or membro.get("role") in ("stop", "platform"):
+                continue
+            for node in membro.get("geometry", []):
+                pt = [node["lat"], node["lon"]]
+                if not coords or coords[-1] != pt:
+                    coords.append(pt)
+        if coords:
+            linhas[ref] = coords
+    return linhas
+
+
+estacoes, grafo, por_nome, nomes, linhas_coords = dados()
 
 # ── Estado da sessão ──────────────────────────────────────────────────────
 
@@ -44,6 +118,7 @@ if "secreta" not in st.session_state:
     st.session_state.vitorias = 0
     st.session_state.streak = 0
     st.session_state.tentativas_total = 0
+    st.session_state.modo_dificil = False
 
 
 # ── Placar de sessão ──────────────────────────────────────────────────────
@@ -68,26 +143,132 @@ with st.sidebar:
     st.markdown("**Instruções**")
     st.markdown(
         "- Digite o nome de uma estação e aperte Enter.\n"
-        "- O jogo mostra: linhas em comum, distância em saltos e a direção.\n"
+        "- O jogo mostra: chips de linha, distância em estações e a direção.\n"
+        "- Chips **sem ✗** = linha em comum com a secreta.\n"
         "- Você tem **6 tentativas** por rodada.\n"
-        "- Clique **Nova estação** para jogar de novo."
+        "- Clique **Nova estação** para jogar de novo.\n\n"
+        "_O mapa precisa de conexão à internet._"
     )
 
+    st.divider()
+    st.session_state.modo_dificil = st.toggle(
+        "🎯 Modo Difícil",
+        value=st.session_state.get("modo_dificil", False),
+    )
+    if st.session_state.modo_dificil:
+        st.caption(
+            "Linhas ocultas no início. "
+            "Uma linha revelada por erro. "
+            "Pan do mapa trava após 5 erros."
+        )
 
-# ── Área principal ────────────────────────────────────────────────────────
 
-def cor_linha(numero: int) -> str:
-    return LINHAS_INFO.get(numero, {}).get("cor", "#888888")
+# ── Componentes Folium ────────────────────────────────────────────────────
+
+class TravarPan(MacroElement):
+    """Injeta JS para desabilitar toda interação de pan/zoom do mapa Leaflet."""
+    def __init__(self):
+        super().__init__()
+        self._template = Template(
+            "{% macro script(this, kwargs) %}"
+            "{{ this._parent.get_name() }}.dragging.disable();"
+            "{{ this._parent.get_name() }}.touchZoom.disable();"
+            "{{ this._parent.get_name() }}.doubleClickZoom.disable();"
+            "{{ this._parent.get_name() }}.scrollWheelZoom.disable();"
+            "{{ this._parent.get_name() }}.keyboard.disable();"
+            "{% endmacro %}"
+        )
 
 
-def badge_linha(numero: int) -> str:
-    """Retorna um span HTML colorido com o número da linha."""
-    cor = cor_linha(numero)
+# ── Funções de renderização ───────────────────────────────────────────────
+
+def chip_linha(linha: int, cor: str, bate: bool) -> str:
+    """Chip colorido de linha; se não bate com a secreta, exibe ✗ vermelho."""
+    if bate:
+        return (
+            f'<span style="background:{cor};color:white;padding:3px 9px;'
+            f'border-radius:10px;font-weight:bold;font-size:0.85em;margin-right:4px">'
+            f'L{linha}</span>'
+        )
     return (
-        f'<span style="background:{cor};color:white;'
-        f'padding:2px 7px;border-radius:10px;font-weight:bold;'
-        f'font-size:0.85em;margin-right:3px">L{numero}</span>'
+        f'<span style="display:inline-block;margin-right:4px">'
+        f'<span style="background:{cor};color:white;padding:3px 9px;'
+        f'border-radius:10px;font-weight:bold;font-size:0.85em;opacity:0.7">'
+        f'L{linha}</span>'
+        f'<span style="color:#cc0000;font-weight:900"> ✗</span>'
+        f'</span>'
     )
+
+
+def renderizar_mapa():
+    """Mapa Folium sem nomes, centrado na secreta, com linhas e palpites."""
+    secreta      = st.session_state.secreta
+    modo_dificil = st.session_state.get("modo_dificil", False)
+    num_erros    = sum(1 for _, res in st.session_state.palpites if not res["acertou"])
+    pan_travado  = modo_dificil and num_erros >= 5
+
+    # Tiles: MapTiler (se chave configurada) ou CartoDB sem rótulos (gratuito)
+    try:
+        chave = st.secrets["maptiler_key"]
+        tiles_url  = f"https://api.maptiler.com/maps/positron/{{z}}/{{x}}/{{y}}.png?key={chave}"
+        tiles_attr = "© MapTiler © OpenStreetMap contributors"
+    except (KeyError, FileNotFoundError, AttributeError):
+        tiles_url  = "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png"
+        tiles_attr = "© OpenStreetMap contributors © CARTO"
+
+    m = folium.Map(
+        location=[secreta["lat"], secreta["lon"]],
+        zoom_start=14,
+        tiles=tiles_url,
+        attr=tiles_attr,
+    )
+
+    if pan_travado:
+        TravarPan().add_to(m)
+
+    # Em modo difícil, revela uma linha por erro na ordem numérica [1,2,3,4,5,15]
+    ordem_linhas = list(CORES_LINHAS.keys())
+    linhas_visiveis = (
+        set(ordem_linhas[:num_erros]) if modo_dificil else set(CORES_LINHAS.keys())
+    )
+
+    # Geometria real via OSM; se indisponível, usa segmentos retos entre estações
+    geom_osm = buscar_geometria_osm()
+
+    for linha in linhas_visiveis:
+        coords = geom_osm.get(linha) or linhas_coords.get(linha, [])
+        if coords:
+            folium.PolyLine(
+                coords,
+                color=CORES_LINHAS.get(linha, "#888888"),
+                weight=4,
+                opacity=0.85,
+            ).add_to(m)
+
+    # Marcadores dos palpites
+    for nome, _ in st.session_state.palpites:
+        e = por_nome[nome]
+        cor_p = CORES_LINHAS.get(e["linhas"][0], "#888888")
+        folium.CircleMarker(
+            location=[e["lat"], e["lon"]],
+            radius=8,
+            color="white",
+            weight=2,
+            fill=True,
+            fill_color=cor_p,
+            fill_opacity=0.9,
+            tooltip=nome,
+        ).add_to(m)
+
+    # Revela a secreta somente ao fim da rodada
+    if st.session_state.fim:
+        folium.Marker(
+            location=[secreta["lat"], secreta["lon"]],
+            tooltip=secreta["nome"],
+            icon=folium.Icon(color="black", icon="star", prefix="fa"),
+        ).add_to(m)
+
+    st_folium(m, width="100%", height=420, returned_objects=[], key="mapa_principal")
 
 
 def renderizar_historico():
@@ -95,19 +276,21 @@ def renderizar_historico():
     if not palpites:
         return
 
+    secreta = st.session_state.secreta
     st.subheader("Histórico")
     for i, (nome, res) in enumerate(palpites, 1):
-        comuns = res["linhas_comuns"]
-        dist   = res["distancia"]
-        seta   = res["direcao"]
+        chips = avaliar_linhas(por_nome[nome], secreta)
+        dist  = res["distancia"]
+        seta  = res["direcao"]
 
-        badges = "".join(badge_linha(l) for l in comuns) if comuns else "—"
+        badges = "".join(chip_linha(c["linha"], c["cor"], c["bate"]) for c in chips)
         emoji_dist = "🟢" if dist == 0 else ("🟡" if dist <= 3 else "🔴")
+        label_dist = f"{dist} estação" if dist == 1 else f"{dist} estações"
 
         col_n, col_l, col_d, col_dir = st.columns([3, 2, 2, 1])
         col_n.markdown(f"**{i}.** {nome}")
         col_l.markdown(badges, unsafe_allow_html=True)
-        col_d.markdown(f"{emoji_dist} {dist} salto{'s' if dist != 1 else ''}")
+        col_d.markdown(f"{emoji_dist} 🚉 {label_dist}")
         col_dir.markdown(f"<h2 style='margin:0'>{seta}</h2>", unsafe_allow_html=True)
 
 
@@ -125,13 +308,13 @@ def renderizar_legenda_linhas():
     st.markdown(" ".join(partes), unsafe_allow_html=True)
 
 
-# Histórico de palpites
+# ── Área principal ────────────────────────────────────────────────────────
+
+renderizar_mapa()
 renderizar_historico()
 
-# Formulário de entrada (só exibe se o jogo ainda não acabou)
 if not st.session_state.fim:
     tentativas_feitas = len(st.session_state.palpites)
-    restantes = MAX_TENTATIVAS - tentativas_feitas
     st.info(f"Tentativa {tentativas_feitas + 1} de {MAX_TENTATIVAS}")
 
     escolha = st.selectbox(
@@ -143,7 +326,6 @@ if not st.session_state.fim:
 
     if st.button("Palpitar", type="primary", disabled=(not escolha)):
         if escolha in por_nome:
-            # Verifica se já foi tentado
             tentadas = [p[0] for p in st.session_state.palpites]
             if escolha in tentadas:
                 st.warning("Você já tentou essa estação!")
@@ -173,7 +355,6 @@ if not st.session_state.fim:
         else:
             st.error("Estação não encontrada. Tente novamente.")
 
-# Mensagem de fim de rodada
 if st.session_state.fim:
     secreta = st.session_state.secreta
     tentativas = len(st.session_state.palpites)
