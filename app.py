@@ -314,12 +314,17 @@ const map = new maplibregl.Map({
   style:'https://tiles.openfreemap.org/styles/liberty',
   center:CENTER,
   zoom:15,
+  pitch:0,
+  bearing:0,
+  maxPitch:0,
   interactive:false,
   maxBounds:[[CENTER[0]-DELTA,CENTER[1]-DELTA],[CENTER[0]+DELTA,CENTER[1]+DELTA]]
 });
 map.on('load',function(){
+  map.setPitch(0);
+  map.setBearing(0);
   for(const layer of map.getStyle().layers){
-    if(layer.type==='symbol') map.setLayoutProperty(layer.id,'visibility','none');
+    if(layer.type==='symbol'||layer.type==='fill-extrusion') map.setLayoutProperty(layer.id,'visibility','none');
   }
   for(const [linha,segs] of Object.entries(GEOM)){
     map.addSource('l'+linha,{type:'geojson',data:{type:'FeatureCollection',features:segs.map(c=>({type:'Feature',geometry:{type:'LineString',coordinates:c}}))}});
