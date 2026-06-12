@@ -68,6 +68,41 @@ def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return R * 2 * math.asin(math.sqrt(min(a, 1.0)))
 
 
+def _dist_ponto_segmento(plat, plon, alat, alon, blat, blon):
+    cos_lat = math.cos(math.radians((plat + alat + blat) / 3))
+    k = math.radians(1) * 6_371_000.0
+    px = (plon - alon) * k * cos_lat
+    py = (plat - alat) * k
+    bx = (blon - alon) * k * cos_lat
+    by = (blat - alat) * k
+    ab2 = bx * bx + by * by
+    if ab2 < 1e-10:
+        return math.sqrt(px * px + py * py)
+    t = max(0.0, min(1.0, (px * bx + py * by) / ab2))
+    dx = px - t * bx
+    dy = py - t * by
+    return math.sqrt(dx * dx + dy * dy)
+
+
+def _dist_ponto_geometria(plat, plon, segs):
+    min_d = float("inf")
+    for seg in segs:
+        for i in range(len(seg) - 1):
+            d = _dist_ponto_segmento(
+                plat, plon, seg[i][0], seg[i][1], seg[i + 1][0], seg[i + 1][1]
+            )
+            min_d = min(min_d, d)
+    return min_d
+
+
+def _geom_valida(segs, coords_estacoes, dist_max=250, dist_pior=500):
+    """True se maioria das estações ≤ dist_max m e nenhuma ultrapassa dist_pior m."""
+    if not segs or not coords_estacoes:
+        return False
+    distancias = [_dist_ponto_geometria(lat, lon, segs) for lat, lon in coords_estacoes]
+    aprovadas = sum(1 for d in distancias if d <= dist_max)
+    return aprovadas > len(distancias) / 2 and max(distancias) <= dist_pior
+
 
 def _segs_da_relacao(elem: dict) -> list:
     segs = []
@@ -119,9 +154,10 @@ def buscar_geometria_osm() -> dict:
     # 2. Overpass ao vivo — uma requisição por linha para evitar timeout
     def _fetch_ref(ref: int) -> list:
         query = (
-            f"[out:json][timeout:45];"
-            f"relation[\"network\"=\"Metrô de São Paulo\"][\"type\"=\"route\"]"
-            f"[\"ref\"=\"{ref}\"];out geom;"
+            f"[out:json][timeout:60];"
+            f"area[\"name\"=\"São Paulo\"][\"admin_level\"=\"8\"]->.a;"
+            f"relation[\"route\"~\"subway|monorail\"][\"ref\"=\"{ref}\"](area.a);"
+            f"out geom;"
         )
         url = ("https://overpass-api.de/api/interpreter?"
                + urllib.parse.urlencode({"data": query}))
@@ -342,15 +378,12 @@ def renderizar_mapa():
     # Cor neutra única: a cor por linha é dica exclusiva dos chips de feedback
     for linha in linhas_visiveis:
         segs_linha = geom_osm.get(linha)
-        if segs_linha:
+        coords_est = linhas_coords.get(linha, [])
+        if segs_linha and _geom_valida(segs_linha, coords_est):
             for seg in segs_linha:
                 folium.PolyLine(seg, color="#777777", weight=3, opacity=0.8).add_to(m)
-        else:
-            coords = linhas_coords.get(linha, [])
-            if coords:
-                folium.PolyLine(
-                    coords, color="#777777", weight=3, opacity=0.8
-                ).add_to(m)
+        elif coords_est:
+            folium.PolyLine(coords_est, color="#777777", weight=3, opacity=0.8).add_to(m)
 
     # Marcadores dos palpites
     for nome, _ in st.session_state.palpites:
