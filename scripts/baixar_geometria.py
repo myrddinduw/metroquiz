@@ -3,9 +3,11 @@
 Traça cada linha do Metrô SP pelos trilhos físicos do OSM (railway=subway/monorail)
 usando Dijkstra por par de estações consecutivas.
 
-Onde o OSM não cobre um par, usa segmento reto entre as duas estações.
-Se a cobertura OSM total for ≥ 50%, a linha é classificada como "trilhos-osm".
-Caso contrário, aplica Chaikin a todos os pontos e classifica como "suavizado".
+Fixes aplicados:
+  1. MAX_RATIO=2.5 — rejeita caminho Dijkstra > 2.5× a distância direta.
+  2. NODE_PREC=4 + costura de componentes — conecta nós desconexos < 20 m.
+  3. SNAP_MAX_M=400 — ampliar alcance do snap (seguro com Fix 1 ativo).
+  4. Chaikin nos gaps — trechos sem OSM recebem suavização, não retas.
 
 Uso:
     python scripts/baixar_geometria.py
@@ -22,20 +24,16 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-LINHAS_ALVO   = {1, 2, 3, 4, 5, 15, 17}
-SAIDA         = Path(__file__).parent.parent / "data" / "linhas_geom.json"
-ESTACOES_PATH = Path(__file__).parent.parent / "data" / "estacoes.json"
+LINHAS_ALVO      = {1, 2, 3, 4, 5, 15, 17}
+SAIDA            = Path(__file__).parent.parent / "data" / "linhas_geom.json"
+ESTACOES_PATH    = Path(__file__).parent.parent / "data" / "estacoes.json"
 
-SNAP_MAX_M    = 300   # distância máxima para encaixar estação no grafo
-DIST_MED_M    = 150   # mediana estação→traçado para log/validação
-DIST_MAX_M    = 400   # máx estação→traçado para log/validação
-CHAIKIN_ITER  = 3     # iterações de suavização Chaikin no fallback total
-NODE_PREC     = 5     # casas decimais para chave de nó (~1 m precisão)
-BBOX          = "-24.1,-46.9,-23.3,-46.3"  # cobre todo o Metrô SP
-
-# Como identificar os ways de cada linha no OSM
-# ref=X funciona para todas, exceto L17 que usa name~"17"
-_LINHA_REF = {1: "1", 2: "2", 3: "3", 4: "4", 5: "5", 15: "15"}
+SNAP_MAX_M       = 400   # Fix 3: era 300 m
+NODE_PREC        = 4     # Fix 2: funde nós a ~11 m (era 5 = ~1 m)
+GAP_COSTURA_M    = 20    # Fix 2: conecta componentes desconexas até este gap
+MAX_RATIO        = 2.5   # Fix 1: rejeita caminho se > X × distância direta
+CHAIKIN_FALLBACK = 2     # Fix 4: iterações Chaikin nos trechos sem OSM
+BBOX             = "-24.1,-46.9,-23.3,-46.3"
 
 
 # ── Geometria ─────────────────────────────────────────────────────────────────
@@ -84,6 +82,11 @@ def comprimento_total(segs):
     return total
 
 
+def _comprimento_pts(pts):
+    return sum(haversine_m(pts[j][0], pts[j][1], pts[j + 1][0], pts[j + 1][1])
+               for j in range(len(pts) - 1))
+
+
 def _mediana(vals):
     if not vals:
         return float("inf")
@@ -99,9 +102,9 @@ def pontuar(segs, coords_est):
     return _mediana(dists), max(dists)
 
 
-# ── Chaikin ───────────────────────────────────────────────────────────────────
+# ── Chaikin (Fix 4) ───────────────────────────────────────────────────────────
 
-def chaikin(pts, iterations=CHAIKIN_ITER):
+def chaikin(pts, iterations=CHAIKIN_FALLBACK):
     """Corner-cutting de Chaikin preservando pontos extremos."""
     for _ in range(iterations):
         novo = [pts[0]]
@@ -118,8 +121,8 @@ def chaikin(pts, iterations=CHAIKIN_ITER):
 
 def construir_grafo(ways):
     """
-    Grafo undirected de uma lista de ways [[lat,lon],...].
-    Nós com mesma coordenada arredondada são fundidos.
+    Grafo undirected de ways [[lat,lon],...].
+    NODE_PREC=4 funde nós a ~11 m.
     """
     nodes: dict = {}
     adj: dict   = {}
@@ -138,6 +141,37 @@ def construir_grafo(ways):
             prev_k = k
 
     return nodes, adj
+
+
+def costurar_componentes(nodes, adj):
+    """
+    Fix 2: adiciona arestas entre nós de componentes diferentes a < GAP_COSTURA_M m.
+    Modifica adj in-place. Retorna número de arestas adicionadas.
+    """
+    keys = list(nodes.keys())
+    vizinhos = {k: {v for v, _ in adj[k]} for k in keys}
+    adicionadas = 0
+
+    for i in range(len(keys)):
+        ka = keys[i]
+        lat_a, lon_a = nodes[ka]
+        for j in range(i + 1, len(keys)):
+            kb = keys[j]
+            if kb in vizinhos[ka]:
+                continue
+            lat_b, lon_b = nodes[kb]
+            # Filtro rápido por diferença de latitude antes do haversine
+            if abs(lat_b - lat_a) * 111_000 > GAP_COSTURA_M:
+                continue
+            d = haversine_m(lat_a, lon_a, lat_b, lon_b)
+            if d < GAP_COSTURA_M:
+                adj[ka].append((kb, d))
+                adj[kb].append((ka, d))
+                vizinhos[ka].add(kb)
+                vizinhos[kb].add(ka)
+                adicionadas += 1
+
+    return adicionadas
 
 
 def snap_estacao(lat, lon, nodes):
@@ -228,13 +262,13 @@ def buscar_trilhos():
 
 def ways_da_linha(elems, ref):
     """
-    Filtra ways OSM para a linha `ref`, excluindo trilhos de pátio/manutenção.
-    L17 não tem tag ref → filtrado pelo nome.
+    Filtra ways OSM para a linha, excluindo pátio/crossover/siding.
+    L17 não tem ref=17 → filtrado por name~"17|Ouro".
     """
     result = []
     for e in elems:
         tags = e.get("tags", {})
-        if tags.get("service"):       # pátio, crossover, siding
+        if tags.get("service"):
             continue
         if ref == 17:
             nome = tags.get("name", "")
@@ -246,26 +280,59 @@ def ways_da_linha(elems, ref):
     return result
 
 
+# ── Montagem com suavização dos gaps (Fix 4) ─────────────────────────────────
+
+def montar_com_suavizacao(segmentos, coords_est):
+    """
+    Constrói a polyline final:
+    - Segmentos OSM: mantidos exatamente como vieram do Dijkstra.
+    - Runs consecutivos de fallback: pontos de controle (estações)
+      suavizados com Chaikin antes de costurar.
+    """
+    if not segmentos:
+        return []
+
+    caminho: list = []
+    i = 0
+
+    while i < len(segmentos):
+        fonte, pts = segmentos[i]
+
+        if fonte == "osm":
+            caminho.extend(pts if not caminho else pts[1:])
+            i += 1
+        else:
+            # Coleta run de fallback consecutivo
+            ctrl = [[coords_est[i][0], coords_est[i][1]]]
+            while i < len(segmentos) and segmentos[i][0] != "osm":
+                ctrl.append([coords_est[i + 1][0], coords_est[i + 1][1]])
+                i += 1
+            suav = chaikin(ctrl) if len(ctrl) >= 2 else ctrl
+            caminho.extend(suav if not caminho else suav[1:])
+
+    return caminho
+
+
 # ── Processamento ─────────────────────────────────────────────────────────────
 
 def tracar_linha(ref, coords_est, elems_linha):
     """
-    Traça a linha par a par: Dijkstra onde o OSM cobre, reto onde não cobre.
-    Retorna (pontos_totais [[lat,lon]], n_osm, n_total).
+    Traça a linha par a par com todos os fixes aplicados.
+    Retorna (caminho, n_osm, n_total, segmentos, n_costura).
+    segmentos: list of ("osm"|"suavizado", pts_ou_None)
     """
-    ways = [[n["lat"], n["lon"]] for e in elems_linha for n in e.get("geometry", [])]
-    # Reconstrói lista de ways como lista de listas de pontos
-    ways_list = []
-    for e in elems_linha:
-        pts = [[n["lat"], n["lon"]] for n in e.get("geometry", [])]
-        if len(pts) >= 2:
-            ways_list.append(pts)
-
+    ways_list = [
+        [[n["lat"], n["lon"]] for n in e.get("geometry", [])]
+        for e in elems_linha
+        if len(e.get("geometry", [])) >= 2
+    ]
     nodes, adj = construir_grafo(ways_list)
 
-    caminho: list = []
-    n_osm = 0
+    # Fix 2: costurar componentes desconexas
+    n_costura = costurar_componentes(nodes, adj) if nodes else 0
+
     n_total = len(coords_est) - 1
+    segmentos: list = []
 
     for i in range(n_total):
         lat_a, lon_a = coords_est[i]
@@ -277,16 +344,20 @@ def tracar_linha(ref, coords_est, elems_linha):
             k_b, d_b = snap_estacao(lat_b, lon_b, nodes)
             if d_a <= SNAP_MAX_M and d_b <= SNAP_MAX_M:
                 seg_osm = dijkstra_caminho(adj, nodes, k_a, k_b)
+                if seg_osm and len(seg_osm) >= 2:
+                    # Fix 1: rejeitar caminhos absurdamente longos
+                    dist_direta = haversine_m(lat_a, lon_a, lat_b, lon_b)
+                    if _comprimento_pts(seg_osm) > dist_direta * MAX_RATIO:
+                        seg_osm = None
 
         if seg_osm and len(seg_osm) >= 2:
-            pts = seg_osm
-            n_osm += 1
+            segmentos.append(("osm", seg_osm))
         else:
-            pts = [[lat_a, lon_a], [lat_b, lon_b]]
+            segmentos.append(("suavizado", None))
 
-        caminho.extend(pts if not caminho else pts[1:])
-
-    return caminho, n_osm, n_total
+    caminho = montar_com_suavizacao(segmentos, coords_est)
+    n_osm = sum(1 for f, _ in segmentos if f == "osm")
+    return caminho, n_osm, n_total, segmentos, n_costura
 
 
 def processar(elems, estacoes_por_linha):
@@ -301,26 +372,25 @@ def processar(elems, estacoes_por_linha):
         elems_linha = ways_da_linha(elems, ref)
         n_ways = len(elems_linha)
 
-        caminho, n_osm, n_total = tracar_linha(ref, coords_est, elems_linha)
+        caminho, n_osm, n_total, segmentos, n_costura = tracar_linha(
+            ref, coords_est, elems_linha
+        )
 
         segs = [caminho]
         med, mx = pontuar(segs, coords_est)
         n_pts = len(caminho)
         km = comprimento_total(segs) / 1000
 
-        if n_osm > 0:
-            fonte = f"trilhos-osm ({n_osm}/{n_total} pares)"
+        costura_str = f" +{n_costura}cost" if n_costura else ""
+        if n_osm == n_total:
+            fonte = f"trilhos-osm ({n_osm}/{n_total})"
+        elif n_osm > 0:
+            fonte = f"híbrido ({n_osm}/{n_total} osm)"
         else:
-            # Sem nenhum par OSM: aplica Chaikin ao caminho todo para suavizar
-            pts_suav = chaikin([[lat, lon] for lat, lon in coords_est])
-            segs = [pts_suav]
-            med, mx = pontuar(segs, coords_est)
-            n_pts = len(pts_suav)
-            km = comprimento_total(segs) / 1000
             fonte = "suavizado"
 
         print(
-            f"  L{ref}: {fonte} | {n_ways} ways | "
+            f"  L{ref}: {fonte}{costura_str} | {n_ways} ways | "
             f"mediana={med:.0f}m | máx={mx:.0f}m | {n_pts} pts ({km:.1f} km)"
         )
         linhas[ref] = segs
