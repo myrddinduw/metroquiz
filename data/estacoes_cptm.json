@@ -1,0 +1,1058 @@
+[
+  {
+    "nome": "Palmeiras-Barra Funda",
+    "lat": -23.5253967,
+    "lon": -46.6674027,
+    "linhas": [
+      7,
+      8,
+      10,
+      11
+    ],
+    "ordem": {
+      "7": 1,
+      "8": 19,
+      "10": 15,
+      "11": 17
+    }
+  },
+  {
+    "nome": "Água Branca",
+    "lat": -23.5213834,
+    "lon": -46.6891028,
+    "linhas": [
+      7
+    ],
+    "ordem": {
+      "7": 2
+    }
+  },
+  {
+    "nome": "Lapa (Linha 7)",
+    "lat": -23.5174147,
+    "lon": -46.7044036,
+    "linhas": [
+      7
+    ],
+    "ordem": {
+      "7": 3
+    }
+  },
+  {
+    "nome": "Piqueri",
+    "lat": -23.5024159,
+    "lon": -46.714962,
+    "linhas": [
+      7
+    ],
+    "ordem": {
+      "7": 4
+    }
+  },
+  {
+    "nome": "Pirituba",
+    "lat": -23.4883715,
+    "lon": -46.7264367,
+    "linhas": [
+      7
+    ],
+    "ordem": {
+      "7": 5
+    }
+  },
+  {
+    "nome": "Vila Clarice",
+    "lat": -23.4693154,
+    "lon": -46.7449524,
+    "linhas": [
+      7
+    ],
+    "ordem": {
+      "7": 6
+    }
+  },
+  {
+    "nome": "Jaraguá",
+    "lat": -23.4547572,
+    "lon": -46.7392213,
+    "linhas": [
+      7
+    ],
+    "ordem": {
+      "7": 7
+    }
+  },
+  {
+    "nome": "Vila Aurora",
+    "lat": -23.4371421,
+    "lon": -46.7474817,
+    "linhas": [
+      7
+    ],
+    "ordem": {
+      "7": 8
+    }
+  },
+  {
+    "nome": "Perus",
+    "lat": -23.4046912,
+    "lon": -46.7538832,
+    "linhas": [
+      7
+    ],
+    "ordem": {
+      "7": 9
+    }
+  },
+  {
+    "nome": "Caieiras",
+    "lat": -23.3658124,
+    "lon": -46.7512428,
+    "linhas": [
+      7
+    ],
+    "ordem": {
+      "7": 10
+    }
+  },
+  {
+    "nome": "Franco da Rocha",
+    "lat": -23.329396,
+    "lon": -46.7262638,
+    "linhas": [
+      7
+    ],
+    "ordem": {
+      "7": 11
+    }
+  },
+  {
+    "nome": "Baltazar Fidélis",
+    "lat": -23.3098689,
+    "lon": -46.7237616,
+    "linhas": [
+      7
+    ],
+    "ordem": {
+      "7": 12
+    }
+  },
+  {
+    "nome": "Francisco Morato",
+    "lat": -23.2820708,
+    "lon": -46.7425416,
+    "linhas": [
+      7
+    ],
+    "ordem": {
+      "7": 13
+    }
+  },
+  {
+    "nome": "Botujuru",
+    "lat": -23.2359467,
+    "lon": -46.7675788,
+    "linhas": [
+      7
+    ],
+    "ordem": {
+      "7": 14
+    }
+  },
+  {
+    "nome": "Campo Limpo Paulista",
+    "lat": -23.2067511,
+    "lon": -46.7853705,
+    "linhas": [
+      7
+    ],
+    "ordem": {
+      "7": 15
+    }
+  },
+  {
+    "nome": "Várzea Paulista",
+    "lat": -23.20891,
+    "lon": -46.8291902,
+    "linhas": [
+      7
+    ],
+    "ordem": {
+      "7": 16
+    }
+  },
+  {
+    "nome": "Jundiaí",
+    "lat": -23.1947789,
+    "lon": -46.8724945,
+    "linhas": [
+      7
+    ],
+    "ordem": {
+      "7": 17
+    }
+  },
+  {
+    "nome": "Itapevi",
+    "lat": -23.5456576,
+    "lon": -46.9351548,
+    "linhas": [
+      8
+    ],
+    "ordem": {
+      "8": 1
+    }
+  },
+  {
+    "nome": "Engenheiro Cardoso",
+    "lat": -23.5352687,
+    "lon": -46.9286138,
+    "linhas": [
+      8
+    ],
+    "ordem": {
+      "8": 2
+    }
+  },
+  {
+    "nome": "Sagrado Coração",
+    "lat": -23.5291978,
+    "lon": -46.9172713,
+    "linhas": [
+      8
+    ],
+    "ordem": {
+      "8": 3
+    }
+  },
+  {
+    "nome": "Jandira",
+    "lat": -23.5276393,
+    "lon": -46.9023003,
+    "linhas": [
+      8
+    ],
+    "ordem": {
+      "8": 4
+    }
+  },
+  {
+    "nome": "Jardim Silveira",
+    "lat": -23.523493,
+    "lon": -46.8934442,
+    "linhas": [
+      8
+    ],
+    "ordem": {
+      "8": 5
+    }
+  },
+  {
+    "nome": "Jardim Belval",
+    "lat": -23.5129611,
+    "lon": -46.8890308,
+    "linhas": [
+      8
+    ],
+    "ordem": {
+      "8": 6
+    }
+  },
+  {
+    "nome": "Barueri",
+    "lat": -23.5125923,
+    "lon": -46.8742424,
+    "linhas": [
+      8
+    ],
+    "ordem": {
+      "8": 7
+    }
+  },
+  {
+    "nome": "Antônio João",
+    "lat": -23.5172574,
+    "lon": -46.8580131,
+    "linhas": [
+      8
+    ],
+    "ordem": {
+      "8": 8
+    }
+  },
+  {
+    "nome": "Santa Terezinha",
+    "lat": -23.5166753,
+    "lon": -46.8480331,
+    "linhas": [
+      8
+    ],
+    "ordem": {
+      "8": 9
+    }
+  },
+  {
+    "nome": "Carapicuíba",
+    "lat": -23.5191929,
+    "lon": -46.8346278,
+    "linhas": [
+      8
+    ],
+    "ordem": {
+      "8": 10
+    }
+  },
+  {
+    "nome": "General Miguel Costa",
+    "lat": -23.5235522,
+    "lon": -46.8158157,
+    "linhas": [
+      8
+    ],
+    "ordem": {
+      "8": 11
+    }
+  },
+  {
+    "nome": "Quitaúna",
+    "lat": -23.5227599,
+    "lon": -46.8070694,
+    "linhas": [
+      8
+    ],
+    "ordem": {
+      "8": 12
+    }
+  },
+  {
+    "nome": "Comandante Sampaio",
+    "lat": -23.5258388,
+    "lon": -46.7953355,
+    "linhas": [
+      8
+    ],
+    "ordem": {
+      "8": 13
+    }
+  },
+  {
+    "nome": "Osasco",
+    "lat": -23.5278311,
+    "lon": -46.7759232,
+    "linhas": [
+      8,
+      9
+    ],
+    "ordem": {
+      "8": 14,
+      "9": 21
+    }
+  },
+  {
+    "nome": "Presidente Altino",
+    "lat": -23.5313512,
+    "lon": -46.7616743,
+    "linhas": [
+      8,
+      9
+    ],
+    "ordem": {
+      "8": 15,
+      "9": 20
+    }
+  },
+  {
+    "nome": "Imperatriz Leopoldina",
+    "lat": -23.5231015,
+    "lon": -46.7367246,
+    "linhas": [
+      8
+    ],
+    "ordem": {
+      "8": 16
+    }
+  },
+  {
+    "nome": "Domingos de Moraes",
+    "lat": -23.5188514,
+    "lon": -46.7214626,
+    "linhas": [
+      8
+    ],
+    "ordem": {
+      "8": 17
+    }
+  },
+  {
+    "nome": "Lapa (Linha 8)",
+    "lat": -23.5203532,
+    "lon": -46.6984089,
+    "linhas": [
+      8
+    ],
+    "ordem": {
+      "8": 18
+    }
+  },
+  {
+    "nome": "Varginha",
+    "lat": -23.7701917,
+    "lon": -46.7118559,
+    "linhas": [
+      9
+    ],
+    "ordem": {
+      "9": 1
+    }
+  },
+  {
+    "nome": "Mendes-Vila Natal",
+    "lat": -23.7542417,
+    "lon": -46.7091852,
+    "linhas": [
+      9
+    ],
+    "ordem": {
+      "9": 2
+    }
+  },
+  {
+    "nome": "Grajaú",
+    "lat": -23.7362993,
+    "lon": -46.6968662,
+    "linhas": [
+      9
+    ],
+    "ordem": {
+      "9": 3
+    }
+  },
+  {
+    "nome": "Primavera-Interlagos",
+    "lat": -23.7223093,
+    "lon": -46.6917501,
+    "linhas": [
+      9
+    ],
+    "ordem": {
+      "9": 4
+    }
+  },
+  {
+    "nome": "Autódromo",
+    "lat": -23.7059963,
+    "lon": -46.6882563,
+    "linhas": [
+      9
+    ],
+    "ordem": {
+      "9": 5
+    }
+  },
+  {
+    "nome": "Jurubatuba",
+    "lat": -23.6771813,
+    "lon": -46.7023734,
+    "linhas": [
+      9
+    ],
+    "ordem": {
+      "9": 6
+    }
+  },
+  {
+    "nome": "Socorro",
+    "lat": -23.6623543,
+    "lon": -46.7113761,
+    "linhas": [
+      9
+    ],
+    "ordem": {
+      "9": 7
+    }
+  },
+  {
+    "nome": "Santo Amaro",
+    "lat": -23.6557728,
+    "lon": -46.7194616,
+    "linhas": [
+      9
+    ],
+    "ordem": {
+      "9": 8
+    }
+  },
+  {
+    "nome": "João Dias",
+    "lat": -23.6393463,
+    "lon": -46.7228973,
+    "linhas": [
+      9
+    ],
+    "ordem": {
+      "9": 9
+    }
+  },
+  {
+    "nome": "Granja Julieta",
+    "lat": -23.627158,
+    "lon": -46.7115512,
+    "linhas": [
+      9
+    ],
+    "ordem": {
+      "9": 10
+    }
+  },
+  {
+    "nome": "Morumbi",
+    "lat": -23.6208156,
+    "lon": -46.7009494,
+    "linhas": [
+      9
+    ],
+    "ordem": {
+      "9": 11
+    }
+  },
+  {
+    "nome": "Berrini",
+    "lat": -23.6040448,
+    "lon": -46.6964881,
+    "linhas": [
+      9
+    ],
+    "ordem": {
+      "9": 12
+    }
+  },
+  {
+    "nome": "Vila Olímpia",
+    "lat": -23.5927615,
+    "lon": -46.692527,
+    "linhas": [
+      9
+    ],
+    "ordem": {
+      "9": 13
+    }
+  },
+  {
+    "nome": "Cidade Jardim",
+    "lat": -23.5851526,
+    "lon": -46.6911258,
+    "linhas": [
+      9
+    ],
+    "ordem": {
+      "9": 14
+    }
+  },
+  {
+    "nome": "Hebraica-Rebouças",
+    "lat": -23.5732997,
+    "lon": -46.6989264,
+    "linhas": [
+      9
+    ],
+    "ordem": {
+      "9": 15
+    }
+  },
+  {
+    "nome": "Pinheiros",
+    "lat": -23.5659351,
+    "lon": -46.7031493,
+    "linhas": [
+      9
+    ],
+    "ordem": {
+      "9": 16
+    }
+  },
+  {
+    "nome": "Cidade Universitária",
+    "lat": -23.5575062,
+    "lon": -46.7119445,
+    "linhas": [
+      9
+    ],
+    "ordem": {
+      "9": 17
+    }
+  },
+  {
+    "nome": "Villa Lobos - Jaguaré",
+    "lat": -23.5454232,
+    "lon": -46.7334338,
+    "linhas": [
+      9
+    ],
+    "ordem": {
+      "9": 18
+    }
+  },
+  {
+    "nome": "Ceasa",
+    "lat": -23.5370802,
+    "lon": -46.7429231,
+    "linhas": [
+      9
+    ],
+    "ordem": {
+      "9": 19
+    }
+  },
+  {
+    "nome": "Rio Grande da Serra",
+    "lat": -23.7434258,
+    "lon": -46.391728,
+    "linhas": [
+      10
+    ],
+    "ordem": {
+      "10": 1
+    }
+  },
+  {
+    "nome": "Ribeirão Pires",
+    "lat": -23.7136412,
+    "lon": -46.4148577,
+    "linhas": [
+      10
+    ],
+    "ordem": {
+      "10": 2
+    }
+  },
+  {
+    "nome": "Guapituba",
+    "lat": -23.6914326,
+    "lon": -46.4491771,
+    "linhas": [
+      10
+    ],
+    "ordem": {
+      "10": 3
+    }
+  },
+  {
+    "nome": "Mauá",
+    "lat": -23.6682293,
+    "lon": -46.4615316,
+    "linhas": [
+      10
+    ],
+    "ordem": {
+      "10": 4
+    }
+  },
+  {
+    "nome": "Capuava",
+    "lat": -23.6584903,
+    "lon": -46.4906054,
+    "linhas": [
+      10
+    ],
+    "ordem": {
+      "10": 5
+    }
+  },
+  {
+    "nome": "Prefeito Celso Daniel - Santo André",
+    "lat": -23.6521148,
+    "lon": -46.528196,
+    "linhas": [
+      10
+    ],
+    "ordem": {
+      "10": 6
+    }
+  },
+  {
+    "nome": "Prefeito Saladino",
+    "lat": -23.6383989,
+    "lon": -46.5367526,
+    "linhas": [
+      10
+    ],
+    "ordem": {
+      "10": 7
+    }
+  },
+  {
+    "nome": "Utinga",
+    "lat": -23.6262316,
+    "lon": -46.544107,
+    "linhas": [
+      10
+    ],
+    "ordem": {
+      "10": 8
+    }
+  },
+  {
+    "nome": "São Caetano do Sul",
+    "lat": -23.6100805,
+    "lon": -46.5700652,
+    "linhas": [
+      10
+    ],
+    "ordem": {
+      "10": 9
+    }
+  },
+  {
+    "nome": "Tamanduateí",
+    "lat": -23.5926961,
+    "lon": -46.5895242,
+    "linhas": [
+      10
+    ],
+    "ordem": {
+      "10": 10
+    }
+  },
+  {
+    "nome": "Ipiranga",
+    "lat": -23.5820033,
+    "lon": -46.5968979,
+    "linhas": [
+      10
+    ],
+    "ordem": {
+      "10": 11
+    }
+  },
+  {
+    "nome": "Juventus - Mooca",
+    "lat": -23.5579522,
+    "lon": -46.6083373,
+    "linhas": [
+      10
+    ],
+    "ordem": {
+      "10": 12
+    }
+  },
+  {
+    "nome": "Brás",
+    "lat": -23.5454214,
+    "lon": -46.6165118,
+    "linhas": [
+      10,
+      11,
+      12
+    ],
+    "ordem": {
+      "10": 13,
+      "11": 15,
+      "12": 13
+    }
+  },
+  {
+    "nome": "Luz",
+    "lat": -23.5350961,
+    "lon": -46.6359559,
+    "linhas": [
+      10,
+      11
+    ],
+    "ordem": {
+      "10": 14,
+      "11": 16
+    }
+  },
+  {
+    "nome": "Estudantes",
+    "lat": -23.5158296,
+    "lon": -46.1851826,
+    "linhas": [
+      11
+    ],
+    "ordem": {
+      "11": 1
+    }
+  },
+  {
+    "nome": "Mogi das Cruzes",
+    "lat": -23.5218483,
+    "lon": -46.19859,
+    "linhas": [
+      11
+    ],
+    "ordem": {
+      "11": 2
+    }
+  },
+  {
+    "nome": "Braz Cubas",
+    "lat": -23.5366942,
+    "lon": -46.2264951,
+    "linhas": [
+      11
+    ],
+    "ordem": {
+      "11": 3
+    }
+  },
+  {
+    "nome": "Jundiapeba",
+    "lat": -23.5425985,
+    "lon": -46.2590936,
+    "linhas": [
+      11
+    ],
+    "ordem": {
+      "11": 4
+    }
+  },
+  {
+    "nome": "Suzano",
+    "lat": -23.5339859,
+    "lon": -46.3085706,
+    "linhas": [
+      11
+    ],
+    "ordem": {
+      "11": 5
+    }
+  },
+  {
+    "nome": "Calmon Viana",
+    "lat": -23.5255628,
+    "lon": -46.3327162,
+    "linhas": [
+      11,
+      12
+    ],
+    "ordem": {
+      "11": 6,
+      "12": 1
+    }
+  },
+  {
+    "nome": "Poá",
+    "lat": -23.5256659,
+    "lon": -46.3439942,
+    "linhas": [
+      11
+    ],
+    "ordem": {
+      "11": 7
+    }
+  },
+  {
+    "nome": "Ferraz de Vasconcelos",
+    "lat": -23.5410723,
+    "lon": -46.368605,
+    "linhas": [
+      11
+    ],
+    "ordem": {
+      "11": 8
+    }
+  },
+  {
+    "nome": "Antonio Gianetti Neto",
+    "lat": -23.5545966,
+    "lon": -46.3843841,
+    "linhas": [
+      11
+    ],
+    "ordem": {
+      "11": 9
+    }
+  },
+  {
+    "nome": "Guaianases",
+    "lat": -23.5424437,
+    "lon": -46.4155199,
+    "linhas": [
+      11
+    ],
+    "ordem": {
+      "11": 10
+    }
+  },
+  {
+    "nome": "José Bonifácio",
+    "lat": -23.5392991,
+    "lon": -46.4322176,
+    "linhas": [
+      11
+    ],
+    "ordem": {
+      "11": 11
+    }
+  },
+  {
+    "nome": "Dom Bosco",
+    "lat": -23.541774,
+    "lon": -46.4488171,
+    "linhas": [
+      11
+    ],
+    "ordem": {
+      "11": 12
+    }
+  },
+  {
+    "nome": "Corinthians-Itaquera",
+    "lat": -23.5420777,
+    "lon": -46.4711247,
+    "linhas": [
+      11
+    ],
+    "ordem": {
+      "11": 13
+    }
+  },
+  {
+    "nome": "Tatuapé",
+    "lat": -23.5403186,
+    "lon": -46.5765028,
+    "linhas": [
+      11,
+      12
+    ],
+    "ordem": {
+      "11": 14,
+      "12": 12
+    }
+  },
+  {
+    "nome": "Aracaré",
+    "lat": -23.4994311,
+    "lon": -46.3390941,
+    "linhas": [
+      12
+    ],
+    "ordem": {
+      "12": 2
+    }
+  },
+  {
+    "nome": "Itaquaquecetuba",
+    "lat": -23.4854705,
+    "lon": -46.3488962,
+    "linhas": [
+      12
+    ],
+    "ordem": {
+      "12": 3
+    }
+  },
+  {
+    "nome": "Engenheiro Manoel Feio",
+    "lat": -23.4794628,
+    "lon": -46.3685234,
+    "linhas": [
+      12
+    ],
+    "ordem": {
+      "12": 4
+    }
+  },
+  {
+    "nome": "Jardim Romano",
+    "lat": -23.485462,
+    "lon": -46.3864773,
+    "linhas": [
+      12
+    ],
+    "ordem": {
+      "12": 5
+    }
+  },
+  {
+    "nome": "Itaim Paulista",
+    "lat": -23.4940608,
+    "lon": -46.4021678,
+    "linhas": [
+      12
+    ],
+    "ordem": {
+      "12": 6
+    }
+  },
+  {
+    "nome": "Jardim Helena - Vila Mara",
+    "lat": -23.4927534,
+    "lon": -46.4215248,
+    "linhas": [
+      12
+    ],
+    "ordem": {
+      "12": 7
+    }
+  },
+  {
+    "nome": "São Miguel Paulista",
+    "lat": -23.4905356,
+    "lon": -46.4444829,
+    "linhas": [
+      12
+    ],
+    "ordem": {
+      "12": 8
+    }
+  },
+  {
+    "nome": "Comendador Ermelino",
+    "lat": -23.4852849,
+    "lon": -46.4828597,
+    "linhas": [
+      12
+    ],
+    "ordem": {
+      "12": 9
+    }
+  },
+  {
+    "nome": "USP Leste",
+    "lat": -23.4855368,
+    "lon": -46.5008682,
+    "linhas": [
+      12
+    ],
+    "ordem": {
+      "12": 10
+    }
+  },
+  {
+    "nome": "Engenheiro Goulart",
+    "lat": -23.4984335,
+    "lon": -46.520354,
+    "linhas": [
+      12,
+      13
+    ],
+    "ordem": {
+      "12": 11,
+      "13": 3
+    }
+  },
+  {
+    "nome": "Aeroporto-Guarulhos",
+    "lat": -23.4326814,
+    "lon": -46.4937087,
+    "linhas": [
+      13
+    ],
+    "ordem": {
+      "13": 1
+    }
+  },
+  {
+    "nome": "Guarulhos-Cecap",
+    "lat": -23.447979,
+    "lon": -46.4934015,
+    "linhas": [
+      13
+    ],
+    "ordem": {
+      "13": 2
+    }
+  }
+]

@@ -9,6 +9,7 @@ from typing import Dict, List, Optional
 
 # Cores oficiais das linhas (hex) — fonte única de verdade
 CORES_LINHAS: Dict[int, str] = {
+    # Metrô
     1:  "#0455A1",
     2:  "#007E5E",
     3:  "#EE372F",
@@ -16,6 +17,14 @@ CORES_LINHAS: Dict[int, str] = {
     5:  "#92278F",
     15: "#9C9C9C",
     17: "#C9A94A",
+    # CPTM
+    7:  "#A6093D",
+    8:  "#97A4AE",
+    9:  "#00B0A0",
+    10: "#00A99D",
+    11: "#F04E37",
+    12: "#143C8C",
+    13: "#6CA92C",
 }
 
 # Mapeamento de número de linha → nome e cor hex
@@ -24,8 +33,34 @@ LINHAS_INFO: Dict[int, Dict] = {
     for num, nome in {
         1: "Azul", 2: "Verde", 3: "Vermelha",
         4: "Amarela", 5: "Lilás", 15: "Prata", 17: "Ouro",
+        7: "Rubi", 8: "Diamante", 9: "Esmeralda",
+        10: "Turquesa", 11: "Coral", 12: "Safira", 13: "Jade",
     }.items()
 }
+
+LINHAS_METRO: set = {1, 2, 3, 4, 5, 15, 17}
+LINHAS_CPTM: set  = {7, 8, 9, 10, 11, 12, 13}
+
+# Nomes OSM → nome canônico do metrô (para merge de baldeações)
+_ALIAS_CPTM: Dict[str, str] = {
+    "barra funda":                    "Palmeiras-Barra Funda",
+    "estacao barra funda":            "Palmeiras-Barra Funda",
+    "estação barra funda":            "Palmeiras-Barra Funda",
+    "palmeiras - barra funda":        "Palmeiras-Barra Funda",
+    "palmeiras–barra funda":          "Palmeiras-Barra Funda",
+    "itaquera":                       "Corinthians-Itaquera",
+    "corinthians - itaquera":         "Corinthians-Itaquera",
+    "morumbi":                        "Morumbi",
+}
+
+
+def _norm_nome(nome: str) -> str:
+    """Normaliza nome de estação para comparação (remove prefixo, lowercase)."""
+    nome = nome.strip()
+    for pref in ("Estação ", "Estacao ", "Est. ", "Estação", "Estacao"):
+        if nome.startswith(pref):
+            nome = nome[len(pref):].strip()
+    return nome.lower().strip()
 
 
 def carregar_estacoes() -> List[Dict]:
@@ -33,6 +68,42 @@ def carregar_estacoes() -> List[Dict]:
     caminho = Path(__file__).parent / "data" / "estacoes.json"
     with open(caminho, encoding="utf-8") as f:
         return json.load(f)
+
+
+def carregar_estacoes_cptm() -> List[Dict]:
+    """Lê data/estacoes_cptm.json (gerado por scripts/baixar_cptm.py)."""
+    caminho = Path(__file__).parent / "data" / "estacoes_cptm.json"
+    with open(caminho, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def mesclar_com_cptm(metro: List[Dict], cptm: List[Dict]) -> List[Dict]:
+    """
+    Une estações CPTM às do metrô por nome normalizado.
+    Estações com o mesmo nome têm linhas e ordens unidas (coords do metrô mantidas).
+    Estações CPTM sem par no metrô são adicionadas ao final.
+    """
+    import copy
+    resultado = copy.deepcopy(metro)
+    por_norm: Dict[str, Dict] = {_norm_nome(e["nome"]): e for e in resultado}
+
+    for e_c in cptm:
+        norm = _norm_nome(e_c["nome"])
+        chave = _ALIAS_CPTM.get(norm, norm)
+        alvo = por_norm.get(chave) or por_norm.get(norm)
+
+        if alvo:
+            for linha in e_c["linhas"]:
+                if linha not in alvo["linhas"]:
+                    alvo["linhas"].append(linha)
+                    alvo["linhas"].sort()
+                alvo["ordem"][str(linha)] = e_c["ordem"][str(linha)]
+        else:
+            novo = copy.deepcopy(e_c)
+            resultado.append(novo)
+            por_norm[norm] = novo
+
+    return resultado
 
 
 def construir_grafo(estacoes: List[Dict]) -> Dict[str, List[str]]:

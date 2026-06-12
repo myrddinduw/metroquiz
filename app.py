@@ -13,10 +13,13 @@ from streamlit_local_storage import LocalStorage
 from game import (
     CORES_LINHAS,
     LINHAS_INFO,
+    LINHAS_METRO,
     avaliar_linhas,
     avaliar_palpite,
     carregar_estacoes,
+    carregar_estacoes_cptm,
     construir_grafo,
+    mesclar_com_cptm,
     sortear_estacao,
 )
 
@@ -32,14 +35,18 @@ st.caption("Adivinhe a estação secreta do Metrô de São Paulo!")
 # ── Dados (carregados uma vez em cache) ───────────────────────────────────
 
 @st.cache_data
-def dados():
-    estacoes = carregar_estacoes()
-    grafo = construir_grafo(estacoes)
-    por_nome = {e["nome"]: e for e in estacoes}
+def dados(modo_cptm: bool = False):
+    ests = carregar_estacoes()
+    if modo_cptm:
+        try:
+            ests = mesclar_com_cptm(ests, carregar_estacoes_cptm())
+        except FileNotFoundError:
+            st.warning("Dados CPTM não encontrados. Execute: python scripts/baixar_cptm.py")
+    grafo = construir_grafo(ests)
+    por_nome = {e["nome"]: e for e in ests}
     nomes = sorted(por_nome.keys())
-    # Pré-computa as coordenadas de cada linha ordenadas para o mapa
-    por_linha = {}
-    for e in estacoes:
+    por_linha: dict = {}
+    for e in ests:
         for linha in e["linhas"]:
             por_linha.setdefault(linha, []).append(e)
     linhas_coords = {
@@ -49,10 +56,11 @@ def dados():
         ]
         for linha, membros in por_linha.items()
     }
-    return estacoes, grafo, por_nome, nomes, linhas_coords
+    return ests, grafo, por_nome, nomes, linhas_coords
 
 
-_GEOM_PATH = Path(__file__).parent / "data" / "linhas_geom.json"
+_GEOM_PATH      = Path(__file__).parent / "data" / "linhas_geom.json"
+_CPTM_GEOM_PATH = Path(__file__).parent / "data" / "linhas_geom_cptm.json"
 
 
 def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -137,7 +145,7 @@ def buscar_geometria_osm() -> dict:
         result = {}
         for k, v in raw.items():
             ref = int(k)
-            if ref not in CORES_LINHAS or not v:
+            if ref not in LINHAS_METRO or not v:
                 continue
             # suporte ao formato antigo (lista plana de [lat,lon])
             if isinstance(v[0][0], (int, float)):
@@ -164,7 +172,7 @@ def buscar_geometria_osm() -> dict:
 
     import time as _time
     linhas: dict = {}
-    for ref in sorted(CORES_LINHAS.keys()):
+    for ref in sorted(LINHAS_METRO):
         for _tentativa in range(3):
             try:
                 elems = _fetch_ref(ref)
@@ -184,7 +192,28 @@ def buscar_geometria_osm() -> dict:
     return linhas
 
 
-estacoes, grafo, por_nome, nomes, linhas_coords = dados()
+@st.cache_data
+def buscar_geometria_cptm() -> dict:
+    """Carrega geometria das linhas CPTM do arquivo pré-computado."""
+    try:
+        with open(_CPTM_GEOM_PATH, encoding="utf-8") as f:
+            raw = _json.load(f)
+        result = {}
+        for k, v in raw.items():
+            ref = int(k)
+            if not v:
+                continue
+            if isinstance(v[0][0], (int, float)):
+                result[ref] = [v]
+            else:
+                result[ref] = v
+        return result
+    except Exception:
+        return {}
+
+
+_modo_cptm_init = st.session_state.get("modo_cptm", False)
+estacoes, grafo, por_nome, nomes, linhas_coords = dados(_modo_cptm_init)
 
 # ── LocalStorage ──────────────────────────────────────────────────────────
 
@@ -203,6 +232,7 @@ def _salvar_estado() -> None:
         "streak":            st.session_state.streak,
         "tentativas_total":  st.session_state.tentativas_total,
         "modo_dificil":      st.session_state.get("modo_dificil", False),
+        "modo_cptm":         st.session_state.get("modo_cptm", False),
     })
 
 
@@ -239,6 +269,7 @@ if "secreta" not in st.session_state:
                 st.session_state.streak           = int(_blob.get("streak", 0))
                 st.session_state.tentativas_total = int(_blob.get("tentativas_total", 0))
                 st.session_state.modo_dificil     = bool(_blob.get("modo_dificil", False))
+                st.session_state.modo_cptm        = bool(_blob.get("modo_cptm", False))
                 _restaurado = True
             except Exception:
                 pass
@@ -250,6 +281,7 @@ if "secreta" not in st.session_state:
         st.session_state.streak           = 0
         st.session_state.tentativas_total = 0
         st.session_state.modo_dificil     = False
+        st.session_state.modo_cptm        = False
 
 
 # ── Placar de sessão ──────────────────────────────────────────────────────
@@ -288,6 +320,23 @@ with st.sidebar:
     )
     if st.session_state.modo_dificil:
         st.caption("Linhas ocultas no início. Uma nova linha revelada a cada erro.")
+
+    st.divider()
+    st.session_state.modo_cptm = st.toggle(
+        "🚆 Modo CPTM",
+        value=st.session_state.get("modo_cptm", False),
+    )
+    if st.session_state.modo_cptm:
+        st.caption("Inclui as 7 linhas da CPTM (L7-L13) no sorteio e no mapa.")
+
+
+# Detecta mudança de modo CPTM e reinicia o jogo com o dataset correto
+_prev_cptm = st.session_state.get("_prev_cptm")
+_curr_cptm = st.session_state.get("modo_cptm", False)
+if _prev_cptm is not None and _prev_cptm != _curr_cptm:
+    nova_rodada()
+    _salvar_estado()
+st.session_state._prev_cptm = _curr_cptm
 
 
 # ── Template MapLibre GL ──────────────────────────────────────────────────
@@ -385,17 +434,20 @@ def renderizar_mapa():
     modo_dificil = st.session_state.get("modo_dificil", False)
     num_erros    = sum(1 for _, res in st.session_state.palpites if not res["acertou"])
 
-    ordem_linhas = list(CORES_LINHAS.keys())
+    # Linhas do dataset ativo (metrô ou metrô+CPTM), em ordem
+    todas_linhas = sorted(set(l for e in estacoes for l in e["linhas"]))
     linhas_visiveis = (
-        set(ordem_linhas[:num_erros]) if modo_dificil else set(CORES_LINHAS.keys())
+        set(todas_linhas[:num_erros]) if modo_dificil else set(todas_linhas)
     )
 
-    geom_osm = buscar_geometria_osm()
+    geom_osm  = buscar_geometria_osm()
+    geom_cptm = buscar_geometria_cptm() if st.session_state.get("modo_cptm") else {}
+    geom_total = {**geom_osm, **geom_cptm}
 
     # Monta geometria para MapLibre — converte [lat, lon] → [lon, lat]
     geom_js: dict = {}
     for linha in linhas_visiveis:
-        segs_linha = geom_osm.get(linha)
+        segs_linha = geom_total.get(linha)
         coords_est = linhas_coords.get(linha, [])
         if segs_linha and _geom_valida(segs_linha, coords_est):
             segs = segs_linha
@@ -456,15 +508,19 @@ def renderizar_historico():
 
 
 def renderizar_legenda_linhas():
-    st.markdown("**Linhas do Metrô SP:**", unsafe_allow_html=True)
+    modo_cptm = st.session_state.get("modo_cptm", False)
+    titulo = "**Linhas do Metrô + CPTM SP:**" if modo_cptm else "**Linhas do Metrô SP:**"
+    st.markdown(titulo, unsafe_allow_html=True)
+    linhas_ativas = sorted(set(l for e in estacoes for l in e["linhas"]))
     partes = []
-    for num, info in LINHAS_INFO.items():
-        cor  = info["cor"]
-        nome = info["nome"]
+    for num in linhas_ativas:
+        info = LINHAS_INFO.get(num)
+        if not info:
+            continue
         partes.append(
-            f'<span style="background:{cor};color:white;'
+            f'<span style="background:{info["cor"]};color:white;'
             f'padding:3px 8px;border-radius:12px;font-weight:bold;'
-            f'font-size:0.8em">L{num} {nome}</span>'
+            f'font-size:0.8em">L{num} {info["nome"]}</span>'
         )
     st.markdown(" ".join(partes), unsafe_allow_html=True)
 
