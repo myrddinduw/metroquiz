@@ -1,4 +1,2 @@
 streamlit
-folium
-streamlit-folium
 streamlit-local-storage

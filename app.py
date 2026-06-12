@@ -6,11 +6,8 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-import folium
 import streamlit as st
-from folium import MacroElement
-from jinja2 import Template
-from streamlit_folium import st_folium
+import streamlit.components.v1 as _components
 from streamlit_local_storage import LocalStorage
 
 from game import (
@@ -293,21 +290,64 @@ with st.sidebar:
         st.caption("Linhas ocultas no início. Uma nova linha revelada a cada erro.")
 
 
-# ── Componentes Folium ────────────────────────────────────────────────────
+# ── Template MapLibre GL ──────────────────────────────────────────────────
 
-class TravarPan(MacroElement):
-    """Injeta JS para desabilitar toda interação de pan/zoom do mapa Leaflet."""
-    def __init__(self):
-        super().__init__()
-        self._template = Template(
-            "{% macro script(this, kwargs) %}"
-            "{{ this._parent.get_name() }}.dragging.disable();"
-            "{{ this._parent.get_name() }}.touchZoom.disable();"
-            "{{ this._parent.get_name() }}.doubleClickZoom.disable();"
-            "{{ this._parent.get_name() }}.scrollWheelZoom.disable();"
-            "{{ this._parent.get_name() }}.keyboard.disable();"
-            "{% endmacro %}"
-        )
+_HTML_MAPA = """\
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+#map{width:100%;height:420px}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<script>
+/*DADOS*/
+const map = new maplibregl.Map({
+  container:'map',
+  style:'https://tiles.openfreemap.org/styles/liberty',
+  center:CENTER,
+  zoom:15,
+  interactive:false,
+  maxBounds:[[CENTER[0]-DELTA,CENTER[1]-DELTA],[CENTER[0]+DELTA,CENTER[1]+DELTA]]
+});
+map.on('load',function(){
+  for(const layer of map.getStyle().layers){
+    if(layer.type==='symbol') map.setLayoutProperty(layer.id,'visibility','none');
+  }
+  for(const [linha,segs] of Object.entries(GEOM)){
+    map.addSource('l'+linha,{type:'geojson',data:{type:'FeatureCollection',features:segs.map(c=>({type:'Feature',geometry:{type:'LineString',coordinates:c}}))}});
+    map.addLayer({id:'l'+linha,type:'line',source:'l'+linha,paint:{'line-color':'#777777','line-width':3,'line-opacity':0.8}});
+  }
+  for(const g of GUESSES){
+    const el=document.createElement('div');
+    el.style.cssText='width:16px;height:16px;border-radius:50%;background:'+g.cor+';border:2px solid white;';
+    new maplibregl.Marker({element:el,anchor:'center'}).setLngLat([g.lon,g.lat]).addTo(map);
+  }
+  const tel=document.createElement('div');
+  if(TARGET.revelado){
+    tel.style.cssText='width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:22px;filter:drop-shadow(0 0 2px #000);';
+    tel.textContent='⭐';
+  } else {
+    tel.style.cssText='width:20px;height:20px;border-radius:50%;background:white;border:3px solid #222;';
+  }
+  new maplibregl.Marker({element:tel,anchor:'center'}).setLngLat([TARGET.lon,TARGET.lat]).addTo(map);
+  if(TARGET.revelado){
+    new maplibregl.Popup({closeButton:false,closeOnClick:false,offset:20})
+      .setHTML('<strong>'+TARGET.nome+'</strong>')
+      .setLngLat([TARGET.lon,TARGET.lat])
+      .addTo(map);
+  }
+});
+</script>
+</body>
+</html>"""
 
 
 # ── Funções de renderização ───────────────────────────────────────────────
@@ -331,100 +371,56 @@ def chip_linha(linha: int, cor: str, bate: bool) -> str:
 
 
 def renderizar_mapa():
-    """Mapa Folium travado nos arredores da secreta, linhas em cor neutra."""
+    """Mapa MapLibre GL (OpenFreeMap) travado nos arredores da secreta."""
     secreta      = st.session_state.secreta
     modo_dificil = st.session_state.get("modo_dificil", False)
     num_erros    = sum(1 for _, res in st.session_state.palpites if not res["acertou"])
 
-    # Tiles: MapTiler (se chave configurada) ou CartoDB sem rótulos (gratuito)
-    try:
-        chave = st.secrets["maptiler_key"]
-        estilo = st.secrets.get("maptiler_style", "dataviz")
-        tiles_url  = f"https://api.maptiler.com/maps/{estilo}/{{z}}/{{x}}/{{y}}.png?key={chave}"
-        tiles_attr = "© MapTiler © OpenStreetMap contributors"
-    except (KeyError, FileNotFoundError, AttributeError):
-        tiles_url  = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png"
-        tiles_attr = "© OpenStreetMap contributors © CARTO"
-
-    # Caixa de confinamento: ±0.008° ao redor da secreta (~900 m)
-    delta = 0.008
-    lat, lon = secreta["lat"], secreta["lon"]
-
-    m = folium.Map(
-        location=[lat, lon],
-        zoom_start=15,
-        min_zoom=15,
-        max_zoom=15,
-        max_bounds=True,
-        min_lat=lat - delta,
-        max_lat=lat + delta,
-        min_lon=lon - delta,
-        max_lon=lon + delta,
-        tiles=tiles_url,
-        attr=tiles_attr,
-        zoom_control=False,
-    )
-    # Desabilita todas as interações de pan/zoom via JavaScript
-    TravarPan().add_to(m)
-
-    # Em modo difícil, revela uma linha por erro na ordem [1,2,3,4,5,15]
     ordem_linhas = list(CORES_LINHAS.keys())
     linhas_visiveis = (
         set(ordem_linhas[:num_erros]) if modo_dificil else set(CORES_LINHAS.keys())
     )
 
-    # Geometria real via OSM; se indisponível, usa segmentos retos entre estações
     geom_osm = buscar_geometria_osm()
 
-    # Cor neutra única: a cor por linha é dica exclusiva dos chips de feedback
+    # Monta geometria para MapLibre — converte [lat, lon] → [lon, lat]
+    geom_js: dict = {}
     for linha in linhas_visiveis:
         segs_linha = geom_osm.get(linha)
         coords_est = linhas_coords.get(linha, [])
         if segs_linha and _geom_valida(segs_linha, coords_est):
-            for seg in segs_linha:
-                folium.PolyLine(seg, color="#777777", weight=3, opacity=0.8).add_to(m)
+            segs = segs_linha
         elif coords_est:
-            folium.PolyLine(coords_est, color="#777777", weight=3, opacity=0.8).add_to(m)
+            segs = [coords_est]
+        else:
+            continue
+        geom_js[str(linha)] = [
+            [[pt[1], pt[0]] for pt in seg]
+            for seg in segs
+        ]
 
-    # Marcadores dos palpites
-    for nome, _ in st.session_state.palpites:
-        e = por_nome[nome]
-        cor_p = CORES_LINHAS.get(e["linhas"][0], "#888888")
-        folium.CircleMarker(
-            location=[e["lat"], e["lon"]],
-            radius=8,
-            color="white",
-            weight=2,
-            fill=True,
-            fill_color=cor_p,
-            fill_opacity=0.9,
-            tooltip=nome,
-        ).add_to(m)
+    lat, lon = secreta["lat"], secreta["lon"]
 
-    # Alvo da secreta — sempre visível, sem texto (círculo branco com borda escura)
-    folium.CircleMarker(
-        location=[lat, lon],
-        radius=10,
-        color="#222222",
-        weight=3,
-        fill=True,
-        fill_color="white",
-        fill_opacity=0.95,
-    ).add_to(m)
+    guesses_data = [
+        {"lon": por_nome[nome]["lon"], "lat": por_nome[nome]["lat"],
+         "cor": CORES_LINHAS.get(por_nome[nome]["linhas"][0], "#888888"), "nome": nome}
+        for nome, _ in st.session_state.palpites
+    ]
+    target_data = {
+        "lon": lon, "lat": lat,
+        "revelado": st.session_state.fim,
+        "nome": secreta["nome"],
+    }
 
-    # Ao fim revela o nome sobrepondo a estrela (DivIcon = sem imagem externa)
-    if st.session_state.fim:
-        folium.Marker(
-            location=[lat, lon],
-            tooltip=secreta["nome"],
-            icon=folium.DivIcon(
-                html='<div style="font-size:26px;line-height:1;filter:drop-shadow(0 0 2px #000)">⭐</div>',
-                icon_size=(30, 30),
-                icon_anchor=(15, 15),
-            ),
-        ).add_to(m)
-
-    st_folium(m, width="100%", height=420, returned_objects=[], key="mapa_principal")
+    dados = (
+        f"const CENTER=[{lon},{lat}];\n"
+        f"const DELTA=0.008;\n"
+        f"const GEOM={_json.dumps(geom_js)};\n"
+        f"const GUESSES={_json.dumps(guesses_data)};\n"
+        f"const TARGET={_json.dumps(target_data)};\n"
+    )
+    html = _HTML_MAPA.replace("/*DADOS*/", dados)
+    _components.html(html, height=422)
 
 
 def renderizar_historico():
