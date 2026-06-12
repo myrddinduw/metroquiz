@@ -325,6 +325,10 @@ map.on('load',function(){
   map.setBearing(0);
   for(const layer of map.getStyle().layers){
     if(layer.type==='symbol') map.setLayoutProperty(layer.id,'visibility','none');
+    if(layer.type==='fill-extrusion'){
+      map.setPaintProperty(layer.id,'fill-extrusion-height',0);
+      map.setPaintProperty(layer.id,'fill-extrusion-base',0);
+    }
   }
   for(const [linha,segs] of Object.entries(GEOM)){
     map.addSource('l'+linha,{type:'geojson',data:{type:'FeatureCollection',features:segs.map(c=>({type:'Feature',geometry:{type:'LineString',coordinates:c}}))}});
