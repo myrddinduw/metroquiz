@@ -339,7 +339,8 @@ def renderizar_mapa():
     # Tiles: MapTiler (se chave configurada) ou CartoDB sem rótulos (gratuito)
     try:
         chave = st.secrets["maptiler_key"]
-        tiles_url  = f"https://api.maptiler.com/maps/positron/{{z}}/{{x}}/{{y}}.png?key={chave}"
+        estilo = st.secrets.get("maptiler_style", "dataviz")
+        tiles_url  = f"https://api.maptiler.com/maps/{estilo}/{{z}}/{{x}}/{{y}}.png?key={chave}"
         tiles_attr = "© MapTiler © OpenStreetMap contributors"
     except (KeyError, FileNotFoundError, AttributeError):
         tiles_url  = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png"
