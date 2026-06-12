@@ -100,13 +100,14 @@ def _dist_ponto_geometria(plat, plon, segs):
     return min_d
 
 
-def _geom_valida(segs, coords_estacoes, dist_max=250, dist_pior=500):
-    """True se maioria das estações ≤ dist_max m e nenhuma ultrapassa dist_pior m."""
+def _geom_valida(segs, coords_estacoes, dist_med=150, dist_max=400):
+    """True se mediana das distâncias estação→geom ≤ dist_med m e máx ≤ dist_max m."""
     if not segs or not coords_estacoes:
         return False
-    distancias = [_dist_ponto_geometria(lat, lon, segs) for lat, lon in coords_estacoes]
-    aprovadas = sum(1 for d in distancias if d <= dist_max)
-    return aprovadas > len(distancias) / 2 and max(distancias) <= dist_pior
+    dists = sorted(_dist_ponto_geometria(lat, lon, segs) for lat, lon in coords_estacoes)
+    n = len(dists)
+    mediana = (dists[n // 2 - 1] + dists[n // 2]) / 2 if n % 2 == 0 else dists[n // 2]
+    return mediana <= dist_med and dists[-1] <= dist_max
 
 
 def _segs_da_relacao(elem: dict) -> list:
@@ -238,8 +239,8 @@ def _salvar_estado() -> None:
 
 # ── Estado da sessão ──────────────────────────────────────────────────────
 
-def nova_rodada():
-    st.session_state.secreta = sortear_estacao(estacoes)
+def nova_rodada(estacao=None):
+    st.session_state.secreta = estacao if estacao is not None else sortear_estacao(estacoes)
     st.session_state.palpites = []
     st.session_state.fim = False
     st.session_state.vitoria = False
@@ -328,6 +329,19 @@ with st.sidebar:
     )
     if st.session_state.modo_cptm:
         st.caption("Inclui as 7 linhas da CPTM (L7-L13) no sorteio e no mapa.")
+
+    st.divider()
+    with st.expander("🛠 Dev"):
+        st.caption("Não conta para estatísticas.")
+        st.session_state.modo_dev = st.toggle(
+            "Ativar modo dev",
+            value=st.session_state.get("modo_dev", False),
+        )
+        if st.session_state.get("modo_dev"):
+            _dev_est = st.selectbox("Estação secreta:", options=nomes, key="dev_estacao")
+            if st.button("Definir como secreta", key="btn_dev"):
+                nova_rodada(por_nome[_dev_est])
+                st.rerun()
 
 
 # Detecta mudança de modo CPTM e reinicia o jogo com o dataset correto
@@ -555,20 +569,24 @@ if not st.session_state.fim:
                 )
                 st.session_state.palpites.append((escolha, resultado))
 
+                _dev = st.session_state.get("modo_dev", False)
                 if resultado["acertou"]:
                     st.session_state.fim = True
                     st.session_state.vitoria = True
-                    st.session_state.rodadas += 1
-                    st.session_state.vitorias += 1
-                    st.session_state.streak += 1
-                    st.session_state.tentativas_total += len(st.session_state.palpites)
+                    if not _dev:
+                        st.session_state.rodadas += 1
+                        st.session_state.vitorias += 1
+                        st.session_state.streak += 1
+                        st.session_state.tentativas_total += len(st.session_state.palpites)
                 elif len(st.session_state.palpites) >= MAX_TENTATIVAS:
                     st.session_state.fim = True
                     st.session_state.vitoria = False
-                    st.session_state.rodadas += 1
-                    st.session_state.streak = 0
+                    if not _dev:
+                        st.session_state.rodadas += 1
+                        st.session_state.streak = 0
 
-                _salvar_estado()
+                if not _dev:
+                    _salvar_estado()
                 st.rerun()
         else:
             st.error("Estação não encontrada. Tente novamente.")
@@ -592,7 +610,8 @@ if st.session_state.fim:
 
     if st.button("🔄 Nova estação", type="primary"):
         nova_rodada()
-        _salvar_estado()
+        if not st.session_state.get("modo_dev"):
+            _salvar_estado()
         st.rerun()
 
 st.divider()

@@ -24,8 +24,9 @@ from pathlib import Path
 LINHAS_ALVO = {1, 2, 3, 4, 5, 15, 17}
 SAIDA = Path(__file__).parent.parent / "data" / "linhas_geom.json"
 ESTACOES_PATH = Path(__file__).parent.parent / "data" / "estacoes.json"
-DIST_MAX_M = 250   # limiar: maioria das estações deve estar abaixo disso
-DIST_PIOR_M = 500  # nenhuma estação pode estar além disso (sinal de relação OSM errada)
+DIST_MED_M = 150    # mediana das distâncias estação→geometria deve ser ≤ isso
+DIST_MAX_M = 400    # distância máxima: nenhuma estação pode ultrapassar
+GAP_COSTURA_M = 300 # gap máximo para costurar dois ways consecutivos
 
 
 # ── Geometria ─────────────────────────────────────────────────────────────────
@@ -77,6 +78,64 @@ def comprimento_total(segs: list) -> float:
         for i in range(len(seg) - 1):
             total += haversine_m(seg[i][0], seg[i][1], seg[i + 1][0], seg[i + 1][1])
     return total
+
+
+def costurar_ways(segs: list) -> list:
+    """
+    Encadeia ways OSM em ordem conectada por proximidade de extremidades.
+    Retorna lista de segmentos (idealmente 1 para linha contínua).
+    Ways separados por mais de GAP_COSTURA_M iniciam um novo segmento.
+    """
+    if len(segs) <= 1:
+        return segs
+
+    remaining = [list(s) for s in segs]
+    chains: list = []
+
+    while remaining:
+        chain = remaining.pop(0)
+        changed = True
+        while changed and remaining:
+            changed = False
+            tail = chain[-1]
+            best_idx = -1
+            best_dist = float("inf")
+            best_reverse = False
+
+            for i, w in enumerate(remaining):
+                d_s = haversine_m(tail[0], tail[1], w[0][0], w[0][1])
+                d_e = haversine_m(tail[0], tail[1], w[-1][0], w[-1][1])
+                if d_s < best_dist:
+                    best_dist, best_idx, best_reverse = d_s, i, False
+                if d_e < best_dist:
+                    best_dist, best_idx, best_reverse = d_e, i, True
+
+            if best_idx >= 0 and best_dist <= GAP_COSTURA_M:
+                w = remaining.pop(best_idx)
+                if best_reverse:
+                    w = list(reversed(w))
+                chain.extend(w[1:])
+                changed = True
+
+        chains.append(chain)
+
+    return chains
+
+
+def _mediana(vals: list) -> float:
+    if not vals:
+        return float("inf")
+    s = sorted(vals)
+    n = len(s)
+    return (s[n // 2 - 1] + s[n // 2]) / 2 if n % 2 == 0 else s[n // 2]
+
+
+def pontuar(segs: list, coords_est: list) -> tuple:
+    """Retorna (mediana, máx) das distâncias estação→geometria em metros."""
+    if not segs or not coords_est:
+        return float("inf"), float("inf")
+    dists = [dist_ponto_geometria(lat, lon, segs) for lat, lon in coords_est]
+    return _mediana(dists), max(dists)
 
 
 # ── Estações ──────────────────────────────────────────────────────────────────
@@ -149,31 +208,6 @@ def buscar_overpass() -> dict:
     return {"elements": elementos}
 
 
-# ── Validação e fallback ──────────────────────────────────────────────────────
-
-def validar_e_construir(ref: int, segs_osm: list, coords_est: list) -> tuple:
-    """
-    Valida que a maioria das estações está ≤ DIST_MAX_M da geometria OSM.
-    Retorna (segs, fonte_str).
-    """
-    if segs_osm and coords_est:
-        distancias = [dist_ponto_geometria(lat, lon, segs_osm) for lat, lon in coords_est]
-        aprovadas = sum(1 for d in distancias if d <= DIST_MAX_M)
-        pior = max(distancias)
-        if aprovadas > len(distancias) / 2 and pior <= DIST_PIOR_M:
-            return segs_osm, f"OSM (pior dist: {pior:.0f} m)"
-        print(
-            f"  L{ref}: OSM reprovado ({aprovadas}/{len(distancias)} ≤ {DIST_MAX_M} m, "
-            f"pior {pior:.0f} m) → fallback para segmentos pelas estações",
-            file=sys.stderr,
-        )
-
-    if coords_est:
-        segs_fallback = [[[lat, lon] for lat, lon in coords_est]]
-        return segs_fallback, "estações (fallback)"
-    return [], "sem dados"
-
-
 # ── Processamento ─────────────────────────────────────────────────────────────
 
 def processar(resultado: dict, estacoes_por_linha: dict) -> dict:
@@ -192,24 +226,48 @@ def processar(resultado: dict, estacoes_por_linha: dict) -> dict:
     for ref in sorted(LINHAS_ALVO):
         coords_est = estacoes_por_linha.get(ref, [])
         elems = por_ref.get(ref, [])
+        n_var = len(elems)
 
-        segs_osm: list = []
-        variantes_str = f"{len(elems)} variante{'s' if len(elems) != 1 else ''}"
-        if elems:
-            melhor = max(elems, key=lambda e: comprimento_total(segs_da_relacao(e)))
-            segs_osm = segs_da_relacao(melhor)
+        # Avalia todos os candidatos; seleciona o de menor mediana
+        best_segs = None
+        best_med = float("inf")
+        best_max = float("inf")
+
+        for elem in elems:
+            segs_raw = segs_da_relacao(elem)
+            if not segs_raw:
+                continue
+            segs_cos = costurar_ways(segs_raw)
+            med, mx = pontuar(segs_cos, coords_est)
+            if med < best_med:
+                best_med, best_max, best_segs = med, mx, segs_cos
+
+        # Valida: mediana ≤ DIST_MED_M e máx ≤ DIST_MAX_M
+        if best_segs is not None and best_med <= DIST_MED_M and best_max <= DIST_MAX_M:
+            segs = best_segs
+            fonte = "OSM"
         else:
-            variantes_str = "0 variantes"
+            if best_segs is not None:
+                print(
+                    f"  L{ref}: OSM reprovado — mediana={best_med:.0f}m máx={best_max:.0f}m "
+                    f"(lim {DIST_MED_M}/{DIST_MAX_M}m) → reto",
+                    file=sys.stderr,
+                )
+            segs = [[[lat, lon] for lat, lon in coords_est]] if coords_est else []
+            fonte = "reto"
+            best_med, best_max = 0.0, 0.0
 
-        segs, fonte = validar_e_construir(ref, segs_osm, coords_est)
         if not segs:
-            print(f"  L{ref}: {variantes_str} → sem segmentos", file=sys.stderr)
+            print(f"  L{ref}: sem dados", file=sys.stderr)
             continue
 
-        km = comprimento_total(segs) / 1000
         n_pts = sum(len(s) for s in segs)
-        print(f"  L{ref}: {variantes_str} → {len(segs)} segs "
-              f"→ {n_pts} pts ({km:.1f} km) [{fonte}]")
+        km = comprimento_total(segs) / 1000
+        print(
+            f"  L{ref}: {n_var} var | {fonte} | "
+            f"mediana={best_med:.0f}m | máx={best_max:.0f}m | "
+            f"{n_pts} pts ({km:.1f} km)"
+        )
         linhas[ref] = segs
 
     return linhas
